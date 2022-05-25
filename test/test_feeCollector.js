@@ -62,14 +62,14 @@ contract("FeeCollector", async accounts => {
     )
   
     this.stakeManager = await StakeAaveManager.new(addresses.aave, addresses.stakeAave)
-    const exchangeManager = await UniswapV2Exchange.new(addresses.uniswapFactory, addresses.uniswapRouterAddress)
+    this.exchangeManager = await UniswapV2Exchange.new(addresses.uniswapFactory, addresses.uniswapRouterAddress)
 
     const initializationArgs = [
       this.mockWETH.address,
       [addresses.feeTreasuryAddress, addresses.idleRebalancer],
       [80000, 20000],
       [],
-      [exchangeManager.address],
+      [this.exchangeManager.address],
       [this.stakeManager.address]
     ]
 
@@ -78,7 +78,7 @@ contract("FeeCollector", async accounts => {
     this.feeCollectorInstance = implementationInstance
 
     await this.stakeManager.transferOwnership(this.feeCollectorInstance.address, {from: this.feeCollectorOwner})
-    await exchangeManager.transferOwnership(this.feeCollectorInstance.address, {from: this.feeCollectorOwner})
+    await this.exchangeManager.transferOwnership(this.feeCollectorInstance.address, {from: this.feeCollectorOwner})
   })
 
   it("Should replace proxy admin", async function () {
@@ -126,7 +126,7 @@ contract("FeeCollector", async accounts => {
 
   it("Should deposit tokens with split set to 50/50", async function() {
 
-    await this.feeCollectorInstance.setSplitAllocation( [this.ratio_one_pecrent.mul(BNify('50')), this.ratio_one_pecrent.mul(BNify('50'))])
+    await this.feeCollectorInstance.setSplitAllocation([this.ratio_one_pecrent.mul(BNify('50')), this.ratio_one_pecrent.mul(BNify('50'))])
 
     await this.feeCollectorInstance.registerTokenToDepositList(this.mockDAI.address)
 
@@ -138,7 +138,7 @@ contract("FeeCollector", async accounts => {
 
     let depositAmount = web3.utils.toWei("500")
     await this.mockDAI.transfer(this.feeCollectorInstance.address, depositAmount)
-    await this.feeCollectorInstance.deposit([true], [0]) 
+    const tx = await this.feeCollectorInstance.deposit([true], [0]) 
     
     let feeTreasuryWethBalanceAfter = BNify(await this.mockWETH.balanceOf.call(addresses.feeTreasuryAddress))
     let idleRebalancerWethBalanceAfter = BNify(await this.mockWETH.balanceOf.call(addresses.idleRebalancer))
@@ -214,7 +214,32 @@ contract("FeeCollector", async accounts => {
     expect(feeTreasuryWethBalanceDiff).to.be.bignumber.equal(idleRebalancerWethBalanceDiff)
 
   })
+  it("Should add a new Stake Manager", async function() {
+    let stakeManagers = await this.feeCollectorInstance.getStakeeManagers()
+    expect(stakeManagers.length).eq(1)
 
+    const newStakeManager = await StakeAaveManager.new(addresses.aave, addresses.stakeAave)
+    await this.feeCollectorInstance.addStakeManager(newStakeManager.address)
+    stakeManagers = await this.feeCollectorInstance.getStakeeManagers()
+    expect(stakeManagers.length).eq(2)
+  })
+
+  it("Should remove a Stake Manager", async function() {
+    let stakeManagers = await this.feeCollectorInstance.getStakeeManagers()
+    expect(stakeManagers.length).eq(1)
+
+    const removeStakeManagerTx = this.feeCollectorInstance.removeStakeManager(0)
+    await expectRevert(removeStakeManagerTx, 'Cannot remove the last stake manager')
+
+    const newStakeManager = await StakeAaveManager.new(addresses.aave, addresses.stakeAave)
+    await this.feeCollectorInstance.addStakeManager(newStakeManager.address)
+    stakeManagers = await this.feeCollectorInstance.getStakeeManagers()
+    expect(stakeManagers.length).eq(2)
+    
+    await this.feeCollectorInstance.removeStakeManager(0)
+    stakeManagers = await this.feeCollectorInstance.getStakeeManagers()
+    expect(stakeManagers.length).eq(1)
+  })
   it("Should change the Exchange Manager and deposit tokens with split set to 50/50", async function () {
 
     await addLiquidityUniswapV3(this.mockDAI.address, this.mockWETH.address, 500, this.feeCollectorOwner, web3.utils.toWei('100'))
@@ -243,6 +268,32 @@ contract("FeeCollector", async accounts => {
     let idleRebalancerWethBalanceDiff = idleRebalancerWethBalanceAfter.sub(idleRebalancerWethBalanceBefore)
 
     expect(feeTreasuryWethBalanceDiff).to.be.bignumber.equal(idleRebalancerWethBalanceDiff)
+  })
+  it("Should add a new Exchange Manager", async function() {
+    let exchangeManagers = await this.feeCollectorInstance.getExchangeManagers()
+    expect(exchangeManagers.length).eq(1)
+
+    const newExchangeManager = await UniswapV3Exchange.new(addresses.swapRouter, addresses.quoter, addresses.uniswapV3FactoryAddress)
+    await this.feeCollectorInstance.addExchangeManager(newExchangeManager.address)
+    exchangeManagers = await this.feeCollectorInstance.getExchangeManagers()
+    expect(exchangeManagers.length).eq(2)
+  })
+
+  it("Should remove an Exchange Manager", async function() {
+    let exchangeManagers = await this.feeCollectorInstance.getExchangeManagers()
+    expect(exchangeManagers.length).eq(1)
+
+    const removeExchangeTx = this.feeCollectorInstance.removeExchangeManager(0)
+    await expectRevert(removeExchangeTx, 'Cannot remove the last exchange')
+
+    const newExchangeManager = await UniswapV3Exchange.new(addresses.swapRouter, addresses.quoter, addresses.uniswapV3FactoryAddress)
+    await this.feeCollectorInstance.addExchangeManager(newExchangeManager.address)
+    exchangeManagers = await this.feeCollectorInstance.getExchangeManagers()
+    expect(exchangeManagers.length).eq(2)
+    
+    await this.feeCollectorInstance.removeExchangeManager(0)
+    exchangeManagers = await this.feeCollectorInstance.getExchangeManagers()
+    expect(exchangeManagers.length).eq(1)
   })
 
   it("Should deposit with max fee tokens and max beneficiaries", async function() {
@@ -397,7 +448,7 @@ contract("FeeCollector", async accounts => {
     await expectRevert(this.feeCollectorInstance.removeAddressFromWhiteList(this.nonZeroAddress, {from: this.otherAddress}), "Unauthorised")
     
     await expectRevert(this.feeCollectorInstance.registerTokenToDepositList(this.nonZeroAddress, {from: this.otherAddress}), "Unauthorised")
-    await expectRevert(this.feeCollectorInstance.removeTokenFromDepositList(this.nonZeroAddress, {from: this.otherAddress}), "Unauthorised")
+    await expectRevert(this.feeCollectorInstance.removeTokenFromDepositList(0, {from: this.otherAddress}), "Unauthorised")
     
     await expectRevert(this.feeCollectorInstance.setSplitAllocation(allocation, {from: this.otherAddress}), "Unauthorised")
     await expectRevert(this.feeCollectorInstance.replaceAdmin(this.nonZeroAddress, {from: this.otherAddress}), "Unauthorised")
@@ -412,8 +463,11 @@ contract("FeeCollector", async accounts => {
     
     let daiInDepositList = await this.feeCollectorInstance.isTokenInDespositList.call(this.mockDAI.address)
     assert.isTrue(daiInDepositList)
+    
+    const depositTokens = await this.feeCollectorInstance.getDepositTokens()
+    const mockDAIIndex = depositTokens.findIndex(token => token === this.mockDAI.address)
 
-    await this.feeCollectorInstance.removeTokenFromDepositList(this.mockDAI.address, {from: this.feeCollectorOwner})
+    await this.feeCollectorInstance.removeTokenFromDepositList(mockDAIIndex, {from: this.feeCollectorOwner})
     let daiNoLongerInDepositList = await this.feeCollectorInstance.isTokenInDespositList.call(this.mockDAI.address)
     assert.isFalse(daiNoLongerInDepositList)
   })

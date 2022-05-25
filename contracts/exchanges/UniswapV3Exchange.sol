@@ -32,7 +32,7 @@ contract UniswapV3Exchange is IExchange, Ownable {
 
   }
 
-  function exchange(address token, uint amountOut, address to, address[] calldata path, bytes memory data) external override onlyOwner {
+  function exchange(address token, uint amountMinOut, address to, address[] calldata path, bytes memory data) external override onlyOwner returns(uint256 amountOut) {
 
     uint256 _amountIn = IERC20(token).balanceOf(address(this));
 
@@ -50,14 +50,14 @@ contract UniswapV3Exchange is IExchange, Ownable {
         recipient: to,
         deadline: block.timestamp + 1800,
         amountIn: _amountIn,
-        amountOutMinimum: amountOut,
+        amountOutMinimum: amountMinOut,
         sqrtPriceLimitX96: 0
     });
 
-    uniswapRouterV3.exactInputSingle(params);
+    amountOut = uniswapRouterV3.exactInputSingle(params);
   }
 
-  function getAmoutOut(address tokenA, address tokenB, uint amountIn) external override onlyOwner returns (uint amountOut, bytes memory data) {
+  function getAmoutOut(address tokenA, address tokenB, uint amountIn) public override onlyOwner returns (uint amountOut, bytes memory data) {
     uint256 _currentAmountOut;
     uint256 _MaxAmountOut = 0;
     uint24 _fee;

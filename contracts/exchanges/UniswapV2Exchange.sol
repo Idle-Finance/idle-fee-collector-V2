@@ -22,13 +22,14 @@ contract UniswapV2Exchange is IExchange, Ownable {
       uniswapRouterV2 = IUniswapV2Router02(router_);
   }
 
-  function exchange(address token, uint amountOut, address to, address[] calldata path, bytes memory data) external override onlyOwner {
+  function exchange(address token, uint amountMinOut, address to, address[] calldata path, bytes memory data) external override onlyOwner returns(uint256 amountOut) {
 
     uint256 amountIn = IERC20(token).balanceOf(address(this));
+    (amountOut,) = getAmoutOut(path[0], path[1], amountIn);
 
     uniswapRouterV2.swapExactTokensForTokensSupportingFeeOnTransferTokens(
       amountIn,
-      amountOut, 
+      amountMinOut, 
       path,
       to,
       block.timestamp + 1800
@@ -41,7 +42,7 @@ contract UniswapV2Exchange is IExchange, Ownable {
       require(token0 != address(0), 'ZERO_ADDRESS');
   }
 
-  function getAmoutOut(address tokenA, address tokenB, uint amountIn) external override onlyOwner returns (uint amountOut, bytes memory data) {
+  function getAmoutOut(address tokenA, address tokenB, uint amountIn) public view override onlyOwner returns (uint amountOut, bytes memory data) {
     (address token0,) = sortTokens(tokenA, tokenB);
     address pairAddress = factory.getPair(tokenA, tokenB);
 
@@ -52,14 +53,10 @@ contract UniswapV2Exchange is IExchange, Ownable {
       return (amountOut, data);
     }
 
-
     (uint reserve0, uint reserve1,) = IUniswapV2Pair(pairAddress).getReserves();
     (uint reserveA, uint reserveB) = tokenA == token0 ? (reserve0, reserve1) : (reserve1, reserve0);
 
-    uint amountInWithFee = amountIn * 997;
-    uint numerator = amountInWithFee * reserveB;
-    uint denominator = (reserveA * 1000)+ amountInWithFee;
-    amountOut = numerator / denominator;
+    amountOut = uniswapRouterV2.getAmountOut(amountIn, reserveA, reserveB);
   }
 
   function approveToken(address _depositToken, uint256 amount) external override onlyOwner {

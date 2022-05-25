@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity = 0.8.14;
 
-import "@openzeppelin/contracts-upgradeable/utils/structs/EnumerableSetUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20Upgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
@@ -11,13 +10,13 @@ import "./interfaces/IExchange.sol";
 import "./interfaces/IStakeManager.sol";
 
 contract FeeCollector is Initializable, AccessControlUpgradeable {
-  using EnumerableSetUpgradeable for EnumerableSetUpgradeable.AddressSet;
+
   using SafeERC20Upgradeable for IERC20Upgradeable;
 
-  IExchange[] private ExchangeManagers;
-  IStakeManager[] private StakeManagers;
+  IExchange[] public ExchangeManagers;
+  IStakeManager[] public StakeManagers;
   IERC20Upgradeable private Weth;
-  EnumerableSetUpgradeable.AddressSet private depositTokens;
+  address [] private depositTokens;
 
   uint256[] private allocations; // 100000 = 100%
   address[] private beneficiaries;
@@ -82,29 +81,19 @@ contract FeeCollector is Initializable, AccessControlUpgradeable {
     IExchange exchange = IExchange(exchangeAddress);
     ExchangeManagers.push(exchange);
     exchangeManagerExists[exchangeAddress] = true;
-
-    address _tokenAddress;
-    for (uint256 index = 0; index < depositTokens.length(); index++) {
-      _tokenAddress = depositTokens.at(index);
-      exchange.approveToken(_tokenAddress, type(uint256).max);
-    }
   }
 
 	// replaces the last exchange manager with the one on the given index
 	// also removes exchange manager approval of deposit tokens
   function removeExchangeManager(uint256 _index) external onlyAdmin {
+    require(ExchangeManagers.length > _index, "Invaild index");
+    require(ExchangeManagers.length > 1, "Cannot remove the last exchange");
 
     IExchange exchange = ExchangeManagers[_index];
     exchangeManagerExists[address(exchange)] = false;
 
     ExchangeManagers[_index] = ExchangeManagers[ExchangeManagers.length-1];
     ExchangeManagers.pop();
-
-    address _tokenAddress;
-    for (uint256 index = 0; index < depositTokens.length(); index++) {
-      _tokenAddress = depositTokens.at(index);
-      exchange.removeApproveToken(_tokenAddress);
-    }
   }
 
 	// cannot set an existing stake manager
@@ -119,6 +108,9 @@ contract FeeCollector is Initializable, AccessControlUpgradeable {
 
 	// replaces the last stake manager with the one on the given index
   function removeStakeManager(uint256 _index) external onlyAdmin {
+    require(StakeManagers.length > _index, "Invaild index");
+    require(StakeManagers.length > 1, "Cannot remove the last stake manager");
+
     IStakeManager stake = StakeManagers[_index];
     stakeManagerExists[address(stake)] = false;
 
@@ -140,9 +132,9 @@ contract FeeCollector is Initializable, AccessControlUpgradeable {
           currentBalance = unstakeToken.balanceOf(address(this));
 
           if (currentBalance > 0) {
-            unstakeToken.safeTransfer(address(StakeManagers[0]), currentBalance);
+            unstakeToken.safeTransfer(address(StakeManagers[i]), currentBalance);
           }
-          StakeManagers[0].claimStaked();
+          StakeManagers[i].claimStaked();
           break;
         }
       }
@@ -201,26 +193,20 @@ contract FeeCollector is Initializable, AccessControlUpgradeable {
   
   // respects the of 15 fee tokens than can be registered
   // WETH cannot be accepted as a fee token
-  // the fee token is approved for the uniswap router
   function registerTokenToDepositList(address _tokenAddress) external onlyAdmin {
-    require(depositTokens.length() < MAX_NUM_FEE_TOKENS, "Too many tokens");
+    require(depositTokens.length < MAX_NUM_FEE_TOKENS, "Too many tokens");
     require(_tokenAddress != address(0), "Token cannot be 0 address");
     require(_tokenAddress != address(Weth), "WETH not supported"); // as there is no WETH to WETH pool in some exchanges
     require(depositTokensExists[_tokenAddress] == false, "Duplicate deposit token");
     depositTokensExists[_tokenAddress] = true;
-    for (uint256 index = 0; index < ExchangeManagers.length; index++) {
-      ExchangeManagers[index].approveToken(_tokenAddress, type(uint256).max);
-    }
-    depositTokens.add(_tokenAddress);
+    depositTokens.push(_tokenAddress);
   }
 
   // also resets uniswap approval
-  function removeTokenFromDepositList(address _tokenAddress) external onlyAdmin {
-    for (uint256 index = 0; index < ExchangeManagers.length; index++) {
-      ExchangeManagers[index].removeApproveToken(_tokenAddress);
-    }
-    depositTokens.remove(_tokenAddress);
-    depositTokensExists[_tokenAddress] = false;
+  function removeTokenFromDepositList(uint256 _index) external onlyAdmin {
+    depositTokensExists[address(depositTokens[_index])] = false;
+    depositTokens[_index] = depositTokens[ExchangeManagers.length-1];
+    depositTokens.pop();
   }
 
 	// moves a specific token to a given address for a given amount
@@ -283,10 +269,7 @@ contract FeeCollector is Initializable, AccessControlUpgradeable {
       require(_depositToken != address(Weth), "WETH not supported");
       require(depositTokensExists[_depositToken] == false, "Duplicate deposit token");
       depositTokensExists[_depositToken] = true;
-      for (uint256 y = 0; y < ExchangeManagers.length; y++) {
-        ExchangeManagers[y].approveToken(_depositToken, type(uint256).max);
-      }
-      depositTokens.add(_depositToken);
+      depositTokens.push(_depositToken);
     }
   }
 
@@ -294,7 +277,7 @@ contract FeeCollector is Initializable, AccessControlUpgradeable {
     bool[] memory _depositTokensEnabled,
     uint256[] memory _minTokenOut
   ) internal {
-    uint256 counter = depositTokens.length();
+    uint256 counter = depositTokens.length;
     require(_depositTokensEnabled.length == counter, "Invalid length");
     require(_minTokenOut.length == counter, "Invalid length");
 
@@ -310,7 +293,7 @@ contract FeeCollector is Initializable, AccessControlUpgradeable {
     for (uint256 index = 0; index < counter; index++) {
       if (_depositTokensEnabled[index] == false) {continue;}
 
-      _tokenInterface = IERC20Upgradeable(depositTokens.at(index));
+      _tokenInterface = IERC20Upgradeable(depositTokens[index]);
 
       _currentBalance = _tokenInterface.balanceOf(address(this));
 
@@ -331,6 +314,8 @@ contract FeeCollector is Initializable, AccessControlUpgradeable {
       if (_currentBalance > 0) {
         _tokenInterface.safeTransfer(address(ExchangeManagers[_exchangeManagerIndex]), _currentBalance);
 
+        ExchangeManagers[_exchangeManagerIndex].approveToken(address(_tokenInterface), _currentBalance);
+
         path[0] = address(_tokenInterface);
 
         ExchangeManagers[_exchangeManagerIndex].exchange(
@@ -340,6 +325,9 @@ contract FeeCollector is Initializable, AccessControlUpgradeable {
           path,
           _amountOutData
         );
+
+        ExchangeManagers[_exchangeManagerIndex].removeApproveToken(address(_tokenInterface));
+
       }
     }
 
@@ -369,7 +357,7 @@ contract FeeCollector is Initializable, AccessControlUpgradeable {
   }
 	
   function _depositAllTokens() internal {
-    uint256 numTokens = depositTokens.length();
+    uint256 numTokens = depositTokens.length;
     bool[] memory depositTokensEnabled = new bool[](numTokens);
     uint256[] memory minTokenOut = new uint256[](numTokens);
 
@@ -426,15 +414,18 @@ contract FeeCollector is Initializable, AccessControlUpgradeable {
   function getBeneficiaries() external view returns (address[] memory) { return (beneficiaries); }
 
   function isTokenInDespositList(address _tokenAddress) external view returns (bool) {return depositTokensExists[_tokenAddress]; }
-  function getNumTokensInDepositList() external view returns (uint256) {return (depositTokens.length());}
+
+  function getNumTokensInDepositList() external view returns (uint256) {return (depositTokens.length);}
 
   function getDepositTokens() external view returns (address[] memory) {
-    uint256 numTokens = depositTokens.length();
+    return depositTokens;
+  }
 
-    address[] memory depositTokenList = new address[](numTokens);
-    for (uint256 index = 0; index < numTokens; index++) {
-      depositTokenList[index] = depositTokens.at(index);
-    }
-    return (depositTokenList);
+  function getExchangeManagers()public view returns(IExchange [] memory){
+    return ExchangeManagers;
+  }
+
+  function getStakeeManagers()public view returns(IStakeManager [] memory){
+    return StakeManagers;
   }
 }
