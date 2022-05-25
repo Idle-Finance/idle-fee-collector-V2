@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.6.0 <=0.7.5;
+pragma solidity >=0.6.0 <=0.8.14;
 
 interface IExchange {
     function exchange(address token, uint amountOut, address to, address[] calldata path,bytes memory data) external;

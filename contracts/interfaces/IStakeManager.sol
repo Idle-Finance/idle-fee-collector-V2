@@ -1,4 +1,4 @@
-pragma solidity >=0.6.0 <=0.7.5;
+pragma solidity >=0.6.0 <=0.8.14;
 
 interface IStakeManager {
   function COOLDOWN_SECONDS() external returns (uint256);

@@ -1,18 +1,17 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.7.5;
+pragma solidity = 0.8.14;
 
 import '@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol';
 import '@uniswap/v2-core/contracts/interfaces/IUniswapV2Pair.sol';
 import "@uniswap/v2-core/contracts/interfaces/IUniswapV2Factory.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/math/SafeMath.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+
 
 import '../interfaces/IExchange.sol';
 
 contract UniswapV2Exchange is IExchange, Ownable {
-  using SafeMath for uint256;
   using SafeERC20 for IERC20;
 
   IUniswapV2Router02 private immutable uniswapRouterV2;
@@ -32,7 +31,7 @@ contract UniswapV2Exchange is IExchange, Ownable {
       amountOut, 
       path,
       to,
-      block.timestamp.add(1800)
+      block.timestamp + 1800
     );
   }
 
@@ -57,10 +56,10 @@ contract UniswapV2Exchange is IExchange, Ownable {
     (uint reserve0, uint reserve1,) = IUniswapV2Pair(pairAddress).getReserves();
     (uint reserveA, uint reserveB) = tokenA == token0 ? (reserve0, reserve1) : (reserve1, reserve0);
 
-    uint amountInWithFee = amountIn.mul(997);
-    uint numerator = amountInWithFee.mul(reserveB);
-    uint denominator = reserveA.mul(1000).add(amountInWithFee);
-    amountOut = numerator.div(denominator);
+    uint amountInWithFee = amountIn * 997;
+    uint numerator = amountInWithFee * reserveB;
+    uint denominator = (reserveA * 1000)+ amountInWithFee;
+    amountOut = numerator / denominator;
   }
 
   function approveToken(address _depositToken, uint256 amount) external override onlyOwner {

@@ -47,7 +47,7 @@ module.exports = {
   plugins: ["solidity-coverage"],
   compilers: {
     solc: {
-      version: "0.7.5",
+      version: "0.8.14",
       // docker: true,
       settings: {
        optimizer: {

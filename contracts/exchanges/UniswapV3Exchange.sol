@@ -1,19 +1,16 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.7.5;
-pragma abicoder v2;
+pragma solidity = 0.8.14;
 
 import "@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
 import "@uniswap/v3-periphery/contracts/interfaces/IQuoter.sol";
 import "@uniswap/v3-core/contracts/interfaces/IUniswapV3Factory.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/math/SafeMath.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 import "../interfaces/IExchange.sol";
 
 contract UniswapV3Exchange is IExchange, Ownable {
-  using SafeMath for uint256;
   using SafeERC20 for IERC20;
 
   ISwapRouter private immutable uniswapRouterV3;
@@ -51,7 +48,7 @@ contract UniswapV3Exchange is IExchange, Ownable {
         tokenOut: _tokenOut,
         fee: poolFee,
         recipient: to,
-        deadline: block.timestamp.add(1800),
+        deadline: block.timestamp + 1800,
         amountIn: _amountIn,
         amountOutMinimum: amountOut,
         sqrtPriceLimitX96: 0

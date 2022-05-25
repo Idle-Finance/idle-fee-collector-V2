@@ -1,18 +1,13 @@
-pragma solidity = 0.7.5;
-pragma experimental ABIEncoderV2;
+pragma solidity = 0.8.14;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
-import "@openzeppelin/contracts/math/SafeMath.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
-
 
 import "../interfaces/IStakedAave.sol";
 import "../interfaces/IStakeManager.sol";
 
 contract StakeAaveManager is IStakeManager , Ownable {
-
-  using SafeMath for uint256;
   using SafeERC20 for IERC20;
 
   IERC20 private Aave;

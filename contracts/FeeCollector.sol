@@ -1,21 +1,17 @@
 // SPDX-License-Identifier: MIT
-pragma solidity = 0.7.5;
-pragma experimental ABIEncoderV2;
+pragma solidity = 0.8.14;
 
-import "@openzeppelin/contracts-upgradeable/math/SafeMathUpgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/utils/EnumerableSetUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/utils/structs/EnumerableSetUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/token/ERC20/SafeERC20Upgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20Upgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/proxy/Initializable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 
 import "./interfaces/IExchange.sol";
 import "./interfaces/IStakeManager.sol";
 
 contract FeeCollector is Initializable, AccessControlUpgradeable {
-
   using EnumerableSetUpgradeable for EnumerableSetUpgradeable.AddressSet;
-  using SafeMathUpgradeable for uint256;
   using SafeERC20Upgradeable for IERC20Upgradeable;
 
   IExchange[] private ExchangeManagers;
@@ -271,7 +267,7 @@ contract FeeCollector is Initializable, AccessControlUpgradeable {
       require(_beneficiaries[index] != address(0), "Beneficiary cannot be 0 address");
       beneficiaries.push(_beneficiaries[index]);
       allocations.push(_allocations[index]);
-      totalAllocation = totalAllocation.add(_allocations[index]);
+      totalAllocation = totalAllocation + _allocations[index];
       beneficiariesExists[_beneficiaries[index]] = true;
     }
     require(totalAllocation == FULL_ALLOC, "Ratio does not equal 100000");
@@ -364,7 +360,7 @@ contract FeeCollector is Initializable, AccessControlUpgradeable {
     
     uint256 sum=0;
     for (uint256 i=0; i<_allocations.length; i++) {
-      sum = sum.add(_allocations[i]);
+      sum = sum +_allocations[i];
     }
 
     require(sum == FULL_ALLOC, "Ratio does not equal 100000");
@@ -392,10 +388,10 @@ contract FeeCollector is Initializable, AccessControlUpgradeable {
 
     for (uint256 i = 0; i < _allocations.length; i++) {
       if (i == _allocations.length - 1) {
-        newAmounts[i] = total.sub(allocatedBalance);
+        newAmounts[i] = total - allocatedBalance;
       } else {
-        currBalance = total.mul(_allocations[i]).div(FULL_ALLOC);
-        allocatedBalance = allocatedBalance.add(currBalance);
+        currBalance = (total *_allocations[i]) / FULL_ALLOC;
+        allocatedBalance = allocatedBalance + currBalance;
         newAmounts[i] = currBalance;
       }
     }
