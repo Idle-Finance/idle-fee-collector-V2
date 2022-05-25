@@ -19,7 +19,7 @@ contract StakeAaveManager is IStakeManager , Ownable {
     Aave = IERC20(_aave);
   }
 
-  function COOLDOWN_SECONDS() external override onlyOwner returns (uint256) {
+  function COOLDOWN_SECONDS() external view override onlyOwner returns (uint256) {
     return StkAave.COOLDOWN_SECONDS();
   }
 
@@ -41,12 +41,17 @@ contract StakeAaveManager is IStakeManager , Ownable {
 
           uint256 currentBa =  Aave.balanceOf(address(this));
 
-          Aave.transfer(msg.sender, currentBa);
+          Aave.safeTransfer(msg.sender, currentBa);
         }
       } else {
         // If it is not over, do nothing
         return;
       }
+    }
+    
+    uint256 balance  = StkAave.balanceOf(msg.sender);
+    if(balance >  0 ) {
+      IERC20(address(StkAave)).safeTransferFrom(msg.sender, address(this), balance);
     }
 
     // If there's no pending cooldown or we just redeem the prev locked rewards,

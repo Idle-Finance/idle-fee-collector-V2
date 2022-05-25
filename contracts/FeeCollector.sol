@@ -121,25 +121,7 @@ contract FeeCollector is Initializable, AccessControlUpgradeable {
 	// find the respective stake manager for each unstake token
 	// and unstakes / starts cooldown for that token
   function claimStakedToken(address[] memory _unstakeTokens) external onlyAdmin {
-
-    IERC20Upgradeable unstakeToken;
-    uint256 currentBalance;
-
-    for (uint256 i=0; i < StakeManagers.length; i++) {
-      for (uint256 y=0; y < _unstakeTokens.length; y++) {
-        if (StakeManagers[i].stakedToken() == _unstakeTokens[y]) {
-          unstakeToken = IERC20Upgradeable(_unstakeTokens[y]);
-          currentBalance = unstakeToken.balanceOf(address(this));
-
-          if (currentBalance > 0) {
-            unstakeToken.safeTransfer(address(StakeManagers[i]), currentBalance);
-          }
-          StakeManagers[i].claimStaked();
-          break;
-        }
-      }
-    }
-
+    _claimStakedToken(_unstakeTokens);
   }
 
 	// before the split allocation is updated internally a call to `deposit()` is made
@@ -385,6 +367,27 @@ contract FeeCollector is Initializable, AccessControlUpgradeable {
     }
     return newAmounts;
   }
+
+  function _claimStakedToken(address[] memory _unstakeTokens) internal {
+    IERC20Upgradeable unstakeToken;
+    uint256 currentBalance;
+
+    for (uint256 i=0; i < StakeManagers.length; i++) {
+      for (uint256 y=0; y < _unstakeTokens.length; y++) {
+        if (StakeManagers[i].stakedToken() == _unstakeTokens[y]) {
+          unstakeToken = IERC20Upgradeable(_unstakeTokens[y]);
+          currentBalance = unstakeToken.balanceOf(address(this));
+
+          unstakeToken.safeApprove(address(StakeManagers[i]), currentBalance);
+          StakeManagers[i].claimStaked();
+          unstakeToken.safeApprove(address(StakeManagers[i]), 0);
+          break;
+        }
+      }
+    }
+
+  }
+
 
 
 	/***********************/
