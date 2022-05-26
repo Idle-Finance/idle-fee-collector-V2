@@ -66,11 +66,46 @@ contract FeeCollector is Initializable, AccessControlUpgradeable {
   // beneficiaries' based on split allocations
   function deposit(
     bool[] memory _depositTokensEnabled,
-    uint256[] memory _minTokenOut
+    uint256[] memory _minTokenOut,
+    address[] memory _managers
   ) public onlyWhitelisted {
-    _deposit(_depositTokensEnabled, _minTokenOut);
+    _unstakeAndDeposit();
+    _deposit(_depositTokensEnabled, _minTokenOut, _managers);
   }
-  
+
+
+  function _previewDeposit(
+    bool[] memory _depositTokensEnabled
+  ) public returns(address [] memory _exchangeManagers) {
+    require(_depositTokensEnabled.length == depositTokens.length, "Invalid length");
+
+    IERC20Upgradeable _tokenInterface;
+    _exchangeManagers = new address[](_depositTokensEnabled.length);
+
+    for (uint256 index = 0; index <  depositTokens.length; index++) {
+      if (_depositTokensEnabled[index] == false) {continue;}
+
+      _tokenInterface = IERC20Upgradeable(depositTokens[index]);
+
+      uint256 _maxAmountOut = 0;
+      uint256 _exchangeManagerIndex;
+      uint256 _currentAmountOut;
+      bytes memory _amountOutData;
+
+      uint256 _currentBalance = _tokenInterface.balanceOf(address(this));
+
+      for (uint256 y = 0; y < ExchangeManagers.length; y++) {
+        (_currentAmountOut, _amountOutData) = ExchangeManagers[y].getAmoutOut(address(_tokenInterface), address(Weth), _currentBalance);
+        if (_currentAmountOut > _maxAmountOut) {
+          _maxAmountOut = _currentAmountOut;
+          _exchangeManagerIndex = y;
+        }
+      }
+      _exchangeManagers[index] = address(ExchangeManagers[_exchangeManagerIndex]);  
+    }
+
+  }
+
 	// cannot set an existing exchange manager
 	// also approve the exchange manager to use all deposit tokens
   function addExchangeManager(address exchangeAddress) external onlyAdmin {
@@ -257,7 +292,8 @@ contract FeeCollector is Initializable, AccessControlUpgradeable {
 
 	function _deposit(
     bool[] memory _depositTokensEnabled,
-    uint256[] memory _minTokenOut
+    uint256[] memory _minTokenOut,
+    address[] memory _managers
   ) internal {
     uint256 counter = depositTokens.length;
     require(_depositTokensEnabled.length == counter, "Invalid length");
@@ -279,28 +315,19 @@ contract FeeCollector is Initializable, AccessControlUpgradeable {
 
       _currentBalance = _tokenInterface.balanceOf(address(this));
 
-      uint256 _maxAmountOut = 0;
-      uint256 _exchangeManagerIndex;
-      uint256 _currentAmountOut;
-      bytes memory _amountOutData;
+      IExchange manager = IExchange(_managers[index]);
 
-      for (uint256 y = 0; y < ExchangeManagers.length; y++) {
-        (_currentAmountOut, _amountOutData) = ExchangeManagers[y].getAmoutOut(address(_tokenInterface), address(Weth), _currentBalance);
-        if (_currentAmountOut > _maxAmountOut) {
-          _maxAmountOut = _currentAmountOut;
-          _exchangeManagerIndex = y;
-        }
-      }
+      (, bytes memory _amountOutData) = manager.getAmoutOut(address(_tokenInterface), address(Weth), _currentBalance);
+
       
-
       if (_currentBalance > 0) {
-        _tokenInterface.safeTransfer(address(ExchangeManagers[_exchangeManagerIndex]), _currentBalance);
+        _tokenInterface.safeTransfer(address(manager), _currentBalance);
 
-        ExchangeManagers[_exchangeManagerIndex].approveToken(address(_tokenInterface), _currentBalance);
+        manager.approveToken(address(_tokenInterface), _currentBalance);
 
         path[0] = address(_tokenInterface);
 
-        ExchangeManagers[_exchangeManagerIndex].exchange(
+        manager.exchange(
           address(_tokenInterface),
           _minTokenOut[index],
           address(this),
@@ -308,7 +335,7 @@ contract FeeCollector is Initializable, AccessControlUpgradeable {
           _amountOutData
         );
 
-        ExchangeManagers[_exchangeManagerIndex].removeApproveToken(address(_tokenInterface));
+        manager.removeApproveToken(address(_tokenInterface));
 
       }
     }
@@ -348,7 +375,11 @@ contract FeeCollector is Initializable, AccessControlUpgradeable {
       minTokenOut[i] = 1;
     }
 
-    _deposit(depositTokensEnabled, minTokenOut);
+    address[] memory managers = _previewDeposit(depositTokensEnabled);
+
+    _unstakeAndDeposit();
+
+    _deposit(depositTokensEnabled, minTokenOut, managers);
   }
 
   function _amountsFromAllocations(uint256[] memory _allocations, uint256 total) internal pure returns (uint256[] memory newAmounts) {
@@ -366,6 +397,21 @@ contract FeeCollector is Initializable, AccessControlUpgradeable {
       }
     }
     return newAmounts;
+  }
+
+  function _unstakeAndDeposit() internal {
+    IERC20Upgradeable unstakeToken;
+    uint256 currentBalance;
+
+    for (uint256 i=0; i < StakeManagers.length; i++) {
+       unstakeToken = IERC20Upgradeable(StakeManagers[i].stakedToken());
+    
+      currentBalance = unstakeToken.balanceOf(address(this));
+
+      unstakeToken.safeApprove(address(StakeManagers[i]), currentBalance);
+      StakeManagers[i].claimStaked();
+      unstakeToken.safeApprove(address(StakeManagers[i]), 0);
+    }
   }
 
   function _claimStakedToken(address[] memory _unstakeTokens) internal {

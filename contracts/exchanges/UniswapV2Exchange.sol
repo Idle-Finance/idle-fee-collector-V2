@@ -42,7 +42,7 @@ contract UniswapV2Exchange is IExchange, Ownable {
       require(token0 != address(0), 'ZERO_ADDRESS');
   }
 
-  function getAmoutOut(address tokenA, address tokenB, uint amountIn) public view override onlyOwner returns (uint amountOut, bytes memory data) {
+  function getAmoutOut(address tokenA, address tokenB, uint amountIn) public override onlyOwner returns (uint amountOut, bytes memory data) {
     (address token0,) = sortTokens(tokenA, tokenB);
     address pairAddress = factory.getPair(tokenA, tokenB);
 

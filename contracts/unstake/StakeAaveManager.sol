@@ -10,8 +10,8 @@ import "../interfaces/IStakeManager.sol";
 contract StakeAaveManager is IStakeManager , Ownable {
   using SafeERC20 for IERC20;
 
-  IERC20 private Aave;
-  IStakedAave private StkAave;
+  IERC20 private immutable Aave;
+  IStakedAave private immutable StkAave;
 
   constructor (address _aave, address _stakeAave) {
     StkAave = IStakedAave(_stakeAave);
@@ -62,7 +62,7 @@ contract StakeAaveManager is IStakeManager , Ownable {
     }
   }
 
-  function token() external view  override returns (address) {
+  function token() external view override returns (address) {
     return address(Aave);
   }
 
