@@ -18,7 +18,7 @@ contract FeeCollector is Initializable, AccessControlUpgradeable {
   IERC20Upgradeable private Weth;
   address [] private depositTokens;
 
-  uint256[] private allocations; // 100000 = 100%
+  uint32[] private allocations; // 100_000 = 100%
   address[] private beneficiaries;
 
   mapping (address => bool) private beneficiariesExists;
@@ -26,10 +26,11 @@ contract FeeCollector is Initializable, AccessControlUpgradeable {
   mapping (address => bool) private exchangeManagerExists;
   mapping (address => bool) private stakeManagerExists;
 
-  uint128 public constant MAX_BENEFICIARIES = 5;
-  uint128 public constant MIN_BENEFICIARIES = 1;
-  uint256 public constant FULL_ALLOC = 100000;
-  uint256 public constant MAX_NUM_FEE_TOKENS = 15;
+  uint8 public constant MAX_BENEFICIARIES = 5;
+  uint8 public constant MIN_BENEFICIARIES = 1;
+  uint8 public constant MAX_DEPOSIT_TOKENS = 15;
+  uint32 public constant FULL_ALLOCATION = 100_000;
+
   bytes32 public constant WHITELISTED = keccak256("WHITELISTED_ROLE");
 
   event DepositTokens(address _depositor, uint256 _amountOut);
@@ -38,11 +39,11 @@ contract FeeCollector is Initializable, AccessControlUpgradeable {
 	// total beneficiaries' allocation should be 100%
   function initialize(
     address _weth,
-    address[] memory _beneficiaries,
-    uint256[] memory _allocations,
-    address[] memory _initialDepositTokens,
-    address[] memory _exchangeManagers,
-    address[] memory _stakeManagers
+    address[] calldata _beneficiaries,
+    uint32[] calldata _allocations,
+    address[] calldata _initialDepositTokens,
+    address[] calldata _exchangeManagers,
+    address[] calldata _stakeManagers
   ) initializer public {
     require(_weth != address(0), "WETH cannot be the 0 address");
     Weth = IERC20Upgradeable(_weth);
@@ -65,51 +66,54 @@ contract FeeCollector is Initializable, AccessControlUpgradeable {
   // converts all registered fee tokens to WETH and deposits to
   // beneficiaries' based on split allocations
   function deposit(
-    bool[] memory _depositTokensEnabled,
-    uint256[] memory _minTokenOut,
-    address[] memory _managers
+    bool[] calldata _depositTokensEnabled,
+    uint256[] calldata _minTokenOut,
+    address[] calldata _managers
   ) public onlyWhitelisted {
     _unstakeAndDeposit();
     _deposit(_depositTokensEnabled, _minTokenOut, _managers);
   }
 
 
-  function _previewDeposit(
+  function previewDeposit(
     bool[] memory _depositTokensEnabled
-  ) public returns(address [] memory _exchangeManagers) {
-    require(_depositTokensEnabled.length == depositTokens.length, "Invalid length");
+  ) public returns(address [] memory) {
+    address[] memory _depositTokens = depositTokens;
+    require(_depositTokensEnabled.length ==  _depositTokens.length, "Invalid length");
 
+    IExchange[] memory _exchangeManagers = ExchangeManagers;
     IERC20Upgradeable _tokenInterface;
-    _exchangeManagers = new address[](_depositTokensEnabled.length);
+    uint256 _maxAmountOut;
+    uint256 _currentAmountOut;
+    uint256 _currentBalance;
+    uint8 _exchangeManagerIndex;
+    bytes memory _amountOutData;
 
-    for (uint256 index = 0; index <  depositTokens.length; index++) {
-      if (_depositTokensEnabled[index] == false) {continue;}
+    address [] memory _managers = new address[](_depositTokensEnabled.length);
 
-      _tokenInterface = IERC20Upgradeable(depositTokens[index]);
+    for (uint8 i = 0; i <  _depositTokens.length; ++i) {
+      if (_depositTokensEnabled[i] == false) {continue;}
 
-      uint256 _maxAmountOut = 0;
-      uint256 _exchangeManagerIndex;
-      uint256 _currentAmountOut;
-      bytes memory _amountOutData;
+      _tokenInterface = IERC20Upgradeable(_depositTokens[i]);
+      _currentBalance = _tokenInterface.balanceOf(address(this));
+      _maxAmountOut = 0;
 
-      uint256 _currentBalance = _tokenInterface.balanceOf(address(this));
-
-      for (uint256 y = 0; y < ExchangeManagers.length; y++) {
-        (_currentAmountOut, _amountOutData) = ExchangeManagers[y].getAmoutOut(address(_tokenInterface), address(Weth), _currentBalance);
+      for (uint8 y = 0; y < _exchangeManagers.length; ++y) {
+        (_currentAmountOut, _amountOutData) = _exchangeManagers[y].getAmoutOut(address(_tokenInterface), address(Weth), _currentBalance);
         if (_currentAmountOut > _maxAmountOut) {
           _maxAmountOut = _currentAmountOut;
           _exchangeManagerIndex = y;
         }
       }
-      _exchangeManagers[index] = address(ExchangeManagers[_exchangeManagerIndex]);  
+      _managers[i] = address(_exchangeManagers[_exchangeManagerIndex]);  
     }
+    return _managers;
 
   }
 
 	// cannot set an existing exchange manager
 	// also approve the exchange manager to use all deposit tokens
   function addExchangeManager(address exchangeAddress) external onlyAdmin {
-    
     require(exchangeManagerExists[exchangeAddress] == false, "Duplicate exchange manager");
     require(exchangeAddress != address(0), "Exchange Manager cannot be 0 address");
     
@@ -121,13 +125,14 @@ contract FeeCollector is Initializable, AccessControlUpgradeable {
 	// replaces the last exchange manager with the one on the given index
 	// also removes exchange manager approval of deposit tokens
   function removeExchangeManager(uint256 _index) external onlyAdmin {
-    require(ExchangeManagers.length > _index, "Invaild index");
-    require(ExchangeManagers.length > 1, "Cannot remove the last exchange");
+    IExchange[] memory _exchangeManagers = ExchangeManagers;
+    require(_exchangeManagers.length > _index, "Invaild index");
+    require(_exchangeManagers.length > 1, "Cannot remove the last exchange");
 
-    IExchange exchange = ExchangeManagers[_index];
+    IExchange exchange = _exchangeManagers[_index];
     exchangeManagerExists[address(exchange)] = false;
 
-    ExchangeManagers[_index] = ExchangeManagers[ExchangeManagers.length-1];
+    ExchangeManagers[_index] = _exchangeManagers[_exchangeManagers.length-1];
     ExchangeManagers.pop();
   }
 
@@ -143,26 +148,27 @@ contract FeeCollector is Initializable, AccessControlUpgradeable {
 
 	// replaces the last stake manager with the one on the given index
   function removeStakeManager(uint256 _index) external onlyAdmin {
-    require(StakeManagers.length > _index, "Invaild index");
-    require(StakeManagers.length > 1, "Cannot remove the last stake manager");
+    IStakeManager[] memory _stakeManagers = StakeManagers;
+    require(_stakeManagers.length > _index, "Invaild index");
+    require(_stakeManagers.length > 1, "Cannot remove the last stake manager");
 
-    IStakeManager stake = StakeManagers[_index];
+    IStakeManager stake = _stakeManagers[_index];
     stakeManagerExists[address(stake)] = false;
 
-    StakeManagers[_index] = StakeManagers[StakeManagers.length-1];
+    StakeManagers[_index] = _stakeManagers[_stakeManagers.length-1];
     StakeManagers.pop();
   }
 
 	// find the respective stake manager for each unstake token
 	// and unstakes / starts cooldown for that token
-  function claimStakedToken(address[] memory _unstakeTokens) external onlyAdmin {
+  function claimStakedToken(address[] calldata _unstakeTokens) external onlyAdmin {
     _claimStakedToken(_unstakeTokens);
   }
 
 	// before the split allocation is updated internally a call to `deposit()` is made
   // such that all fee accrued using the previous allocations.
   // the split allocations must sum to 100000.
-  function setSplitAllocation(uint256[] calldata _allocations) external onlyAdmin {
+  function setSplitAllocation(uint32[] calldata _allocations) external onlyAdmin {
     _depositAllTokens();
 
     _setSplitAllocation(_allocations);
@@ -170,9 +176,9 @@ contract FeeCollector is Initializable, AccessControlUpgradeable {
 
   // the new allocations must include the new beneficiary
   // there's also a maximum of 5 beneficiaries
-  function addBeneficiaryAddress(address _newBeneficiary, uint256[] calldata _newAllocation) external onlyAdmin {
+  function addBeneficiaryAddress(address _newBeneficiary, uint32[] calldata _newAllocation) external onlyAdmin {
     require(beneficiaries.length < MAX_BENEFICIARIES, "Max beneficiaries");
-    require(_newBeneficiary!=address(0), "beneficiary cannot be 0 address");
+    require(_newBeneficiary != address(0), "Beneficiary cannot be 0 address");
 
     require(beneficiariesExists[_newBeneficiary] == false, "Duplicate beneficiary");
     beneficiariesExists[_newBeneficiary] = true;
@@ -185,16 +191,17 @@ contract FeeCollector is Initializable, AccessControlUpgradeable {
   }
 
   // the beneficiary at the last index, will be replaced with the beneficiary at a given index
-  function removeBeneficiaryAt(uint256 _index, uint256[] calldata _newAllocation) external onlyAdmin {
-    require(_index < beneficiaries.length, "Out of range");
-    require(beneficiaries.length > MIN_BENEFICIARIES, "Min beneficiaries");
+  function removeBeneficiaryAt(uint256 _index, uint32[] calldata _newAllocation) external onlyAdmin {
+    address[] memory _beneficiaries = beneficiaries;
+    require(_index < _beneficiaries.length, "Out of range");
+    require(_beneficiaries.length > MIN_BENEFICIARIES, "Min beneficiaries");
     
     _depositAllTokens();
 
-    beneficiaries[_index] = beneficiaries[beneficiaries.length-1];
+    beneficiaries[_index] = _beneficiaries[_beneficiaries.length-1];
     beneficiaries.pop();
 
-    beneficiariesExists[beneficiaries[_index]] = false;
+    beneficiariesExists[_beneficiaries[_index]] = false;
     
     _setSplitAllocation(_newAllocation);
   }
@@ -211,7 +218,7 @@ contract FeeCollector is Initializable, AccessControlUpgradeable {
   // respects the of 15 fee tokens than can be registered
   // WETH cannot be accepted as a fee token
   function registerTokenToDepositList(address _tokenAddress) external onlyAdmin {
-    require(depositTokens.length < MAX_NUM_FEE_TOKENS, "Too many tokens");
+    require(depositTokens.length < MAX_DEPOSIT_TOKENS, "Too many tokens");
     require(_tokenAddress != address(0), "Token cannot be 0 address");
     require(_tokenAddress != address(Weth), "WETH not supported"); // as there is no WETH to WETH pool in some exchanges
     require(depositTokensExists[_tokenAddress] == false, "Duplicate deposit token");
@@ -219,10 +226,10 @@ contract FeeCollector is Initializable, AccessControlUpgradeable {
     depositTokens.push(_tokenAddress);
   }
 
-  // also resets uniswap approval
   function removeTokenFromDepositList(uint256 _index) external onlyAdmin {
-    depositTokensExists[address(depositTokens[_index])] = false;
-    depositTokens[_index] = depositTokens[ExchangeManagers.length-1];
+    address[] memory _depositTokens = depositTokens;
+    depositTokensExists[address(_depositTokens[_index])] = false;
+    depositTokens[_index] = _depositTokens[_depositTokens.length - 1];
     depositTokens.pop();
   }
 
@@ -242,8 +249,8 @@ contract FeeCollector is Initializable, AccessControlUpgradeable {
 	/*****  INTERNAL   *****/
 	/***********************/
 
-	function _setStakeManagers(address[] memory _stakeManagers) internal {
-    for (uint256 index = 0; index < _stakeManagers.length; index++) {
+	function _setStakeManagers(address[] calldata _stakeManagers) internal {
+    for (uint256 index = 0; index < _stakeManagers.length; ++index) {
       require(stakeManagerExists[_stakeManagers[index]] == false, "Duplicate stake manager");
       require(_stakeManagers[index] != address(0), "Stake Manager cannot be 0 address");
       stakeManagerExists[_stakeManagers[index]] = true;
@@ -251,8 +258,8 @@ contract FeeCollector is Initializable, AccessControlUpgradeable {
     }
   }
 
-  function _setExchangeManagers(address[] memory _exchangeManagers) internal {
-    for (uint256 index = 0; index < _exchangeManagers.length; index++) {
+  function _setExchangeManagers(address[] calldata _exchangeManagers) internal {
+    for (uint256 index = 0; index < _exchangeManagers.length; ++index) {
       require(exchangeManagerExists[_exchangeManagers[index]] == false, "Duplicate exchange manager");
       require(_exchangeManagers[index] != address(0), "Exchange Manager cannot be 0 address");
       exchangeManagerExists[_exchangeManagers[index]] = true; 
@@ -260,12 +267,12 @@ contract FeeCollector is Initializable, AccessControlUpgradeable {
     }
   }
 
-  function _setBeneficiaries(address[] memory _beneficiaries, uint256[] memory _allocations) internal {
+  function _setBeneficiaries(address[] calldata _beneficiaries, uint32[] calldata _allocations) internal {
     require(_beneficiaries.length == _allocations.length, "Allocations length != beneficiaries length");
     require(_beneficiaries.length <= MAX_BENEFICIARIES);
 
-    uint256 totalAllocation = 0;
-    for (uint256 index = 0; index < _beneficiaries.length; index++) {
+    uint32 totalAllocation = 0;
+    for (uint8 index = 0; index < _beneficiaries.length; ++index) {
       require(beneficiariesExists[_beneficiaries[index]] == false, "Duplicate beneficiary");
       require(_beneficiaries[index] != address(0), "Beneficiary cannot be 0 address");
       beneficiaries.push(_beneficiaries[index]);
@@ -273,14 +280,14 @@ contract FeeCollector is Initializable, AccessControlUpgradeable {
       totalAllocation = totalAllocation + _allocations[index];
       beneficiariesExists[_beneficiaries[index]] = true;
     }
-    require(totalAllocation == FULL_ALLOC, "Ratio does not equal 100000");
+    require(totalAllocation == FULL_ALLOCATION, "Ratio does not equal 100000");
   }
 
-  function _setDepositTokens(address[] memory _initialDepositTokens) internal {
-    require(_initialDepositTokens.length <= MAX_NUM_FEE_TOKENS);
+  function _setDepositTokens(address[] calldata _initialDepositTokens) internal {
+    require(_initialDepositTokens.length <= MAX_DEPOSIT_TOKENS);
 
     address _depositToken;
-    for (uint256 index = 0; index < _initialDepositTokens.length; index++) {
+    for (uint8 index = 0; index < _initialDepositTokens.length; ++index) {
       _depositToken = _initialDepositTokens[index];
       require(_depositToken != address(0), "Token cannot be 0 address");
       require(_depositToken != address(Weth), "WETH not supported");
@@ -295,35 +302,33 @@ contract FeeCollector is Initializable, AccessControlUpgradeable {
     uint256[] memory _minTokenOut,
     address[] memory _managers
   ) internal {
-    uint256 counter = depositTokens.length;
-    require(_depositTokensEnabled.length == counter, "Invalid length");
-    require(_minTokenOut.length == counter, "Invalid length");
+    address[] memory _depositTokens = depositTokens;
+    require(_depositTokensEnabled.length == _depositTokens.length, "Invalid length");
+    require(_minTokenOut.length == _depositTokens.length, "Invalid length");
 
-    uint256 _currentBalance;
     IERC20Upgradeable _tokenInterface;
+    IExchange manager;
 
-    uint256 wethBalance;
+    uint256 _tokenBalance;
 
     address[] memory path = new address[](2);
     path[1] = address(Weth);
 
-
-    for (uint256 index = 0; index < counter; index++) {
+    for (uint8 index = 0; index < _depositTokens.length; ++index) {
       if (_depositTokensEnabled[index] == false) {continue;}
 
-      _tokenInterface = IERC20Upgradeable(depositTokens[index]);
+      _tokenInterface = IERC20Upgradeable(_depositTokens[index]);
 
-      _currentBalance = _tokenInterface.balanceOf(address(this));
+      _tokenBalance = _tokenInterface.balanceOf(address(this));
 
-      IExchange manager = IExchange(_managers[index]);
+      manager = IExchange(_managers[index]);
 
-      (, bytes memory _amountOutData) = manager.getAmoutOut(address(_tokenInterface), address(Weth), _currentBalance);
+      (, bytes memory _amountOutData) = manager.getAmoutOut(address(_tokenInterface), address(Weth), _tokenBalance);
 
-      
-      if (_currentBalance > 0) {
-        _tokenInterface.safeTransfer(address(manager), _currentBalance);
+      if (_tokenBalance > 0) {
+        _tokenInterface.safeTransfer(address(manager), _tokenBalance);
 
-        manager.approveToken(address(_tokenInterface), _currentBalance);
+        manager.approveToken(address(_tokenInterface), _tokenBalance);
 
         path[0] = address(_tokenInterface);
 
@@ -340,93 +345,97 @@ contract FeeCollector is Initializable, AccessControlUpgradeable {
       }
     }
 
-    wethBalance = Weth.balanceOf(address(this));
+    uint256 _wethBalance = Weth.balanceOf(address(this));
+    uint32[] memory _allocations = allocations;
 
-    if (wethBalance > 0){
-      uint256[] memory feeBalances = _amountsFromAllocations(allocations, wethBalance);
+    if (_wethBalance > 0){
+      uint256[] memory wethBalanceToken = _amountsFromAllocations(_allocations, _wethBalance);
 
-      for (uint256 a_index = 0; a_index < allocations.length; a_index++){
-        Weth.safeTransfer(beneficiaries[a_index], feeBalances[a_index]);
+      for (uint8 index = 0; index < _allocations.length; ++index){
+        Weth.safeTransfer(beneficiaries[index], wethBalanceToken[index]);
       }
     }
-    emit DepositTokens(msg.sender, wethBalance);
+    emit DepositTokens(msg.sender, _wethBalance);
   }
 
-  function _setSplitAllocation(uint256[] memory _allocations) internal {
+  function _setSplitAllocation(uint32[] calldata _allocations) internal {
     require(_allocations.length == beneficiaries.length, "Invalid length");
     
-    uint256 sum=0;
-    for (uint256 i=0; i<_allocations.length; i++) {
-      sum = sum +_allocations[i];
+    uint32 _totalAllocation = 0;
+    for (uint8 i = 0; i < _allocations.length; ++i) {
+      _totalAllocation += _allocations[i];
     }
 
-    require(sum == FULL_ALLOC, "Ratio does not equal 100000");
+    require(_totalAllocation == FULL_ALLOCATION, "Ratio does not equal 100000");
 
     allocations = _allocations;
   }
 	
   function _depositAllTokens() internal {
-    uint256 numTokens = depositTokens.length;
-    bool[] memory depositTokensEnabled = new bool[](numTokens);
-    uint256[] memory minTokenOut = new uint256[](numTokens);
+    uint256 depositTokensLength = depositTokens.length;
+    bool[] memory depositTokensEnabled = new bool[](depositTokensLength);
+    uint256[] memory minTokenOut = new uint256[](depositTokensLength);
 
-    for (uint256 i = 0; i < numTokens; i++) {
+    for (uint8 i = 0; i < depositTokensLength; ++i) {
       depositTokensEnabled[i] = true;
       minTokenOut[i] = 1;
     }
 
-    address[] memory managers = _previewDeposit(depositTokensEnabled);
+    address[] memory managers = previewDeposit(depositTokensEnabled);
 
     _unstakeAndDeposit();
 
     _deposit(depositTokensEnabled, minTokenOut, managers);
   }
 
-  function _amountsFromAllocations(uint256[] memory _allocations, uint256 total) internal pure returns (uint256[] memory newAmounts) {
-    newAmounts = new uint256[](_allocations.length);
-    uint256 currBalance;
-    uint256 allocatedBalance;
+  function _amountsFromAllocations(uint32[] memory _allocations, uint256 totalBalanceWeth) internal pure returns (uint256[] memory) {
+    uint256 currentBalanceWeth;
+    uint256 allocatedBalanceWeth;
 
-    for (uint256 i = 0; i < _allocations.length; i++) {
+    uint256[] memory amountWeth = new uint256[](_allocations.length);
+
+    for (uint8 i = 0; i < _allocations.length; ++i) {
       if (i == _allocations.length - 1) {
-        newAmounts[i] = total - allocatedBalance;
+        amountWeth[i] = totalBalanceWeth - allocatedBalanceWeth;
       } else {
-        currBalance = (total *_allocations[i]) / FULL_ALLOC;
-        allocatedBalance = allocatedBalance + currBalance;
-        newAmounts[i] = currBalance;
+        currentBalanceWeth = (totalBalanceWeth * _allocations[i]) / FULL_ALLOCATION;
+        allocatedBalanceWeth += currentBalanceWeth;
+        amountWeth[i] = currentBalanceWeth;
       }
     }
-    return newAmounts;
+    return amountWeth;
   }
 
   function _unstakeAndDeposit() internal {
+    IStakeManager[] memory _stakeManagers = StakeManagers;
     IERC20Upgradeable unstakeToken;
-    uint256 currentBalance;
+    uint256 tokenBalance;
 
-    for (uint256 i=0; i < StakeManagers.length; i++) {
-       unstakeToken = IERC20Upgradeable(StakeManagers[i].stakedToken());
+    for (uint8 i = 0; i < _stakeManagers.length; ++i) {
+      unstakeToken = IERC20Upgradeable(_stakeManagers[i].stakedToken());
     
-      currentBalance = unstakeToken.balanceOf(address(this));
+      tokenBalance = unstakeToken.balanceOf(address(this));
 
-      unstakeToken.safeApprove(address(StakeManagers[i]), currentBalance);
-      StakeManagers[i].claimStaked();
-      unstakeToken.safeApprove(address(StakeManagers[i]), 0);
+      unstakeToken.safeApprove(address(_stakeManagers[i]), tokenBalance);
+      _stakeManagers[i].claimStaked();
+      unstakeToken.safeApprove(address(_stakeManagers[i]), 0);
     }
   }
 
-  function _claimStakedToken(address[] memory _unstakeTokens) internal {
+  function _claimStakedToken(address[] calldata _unstakeTokens) internal {
+    IStakeManager[] memory _stakeManagers = StakeManagers;
     IERC20Upgradeable unstakeToken;
-    uint256 currentBalance;
+    uint256 tokenBalance;
 
-    for (uint256 i=0; i < StakeManagers.length; i++) {
-      for (uint256 y=0; y < _unstakeTokens.length; y++) {
-        if (StakeManagers[i].stakedToken() == _unstakeTokens[y]) {
+    for (uint8 i = 0; i < _stakeManagers.length; ++i) {
+      for (uint8 y = 0; y < _unstakeTokens.length; ++y) {
+        if (_stakeManagers[i].stakedToken() == _unstakeTokens[y]) {
           unstakeToken = IERC20Upgradeable(_unstakeTokens[y]);
-          currentBalance = unstakeToken.balanceOf(address(this));
+          tokenBalance = unstakeToken.balanceOf(address(this));
 
-          unstakeToken.safeApprove(address(StakeManagers[i]), currentBalance);
-          StakeManagers[i].claimStaked();
-          unstakeToken.safeApprove(address(StakeManagers[i]), 0);
+          unstakeToken.safeApprove(address(_stakeManagers[i]), tokenBalance);
+          _stakeManagers[i].claimStaked();
+          unstakeToken.safeApprove(address(_stakeManagers[i]), 0);
           break;
         }
       }
@@ -455,7 +464,7 @@ contract FeeCollector is Initializable, AccessControlUpgradeable {
 	/*****  VIEWS      *****/
 	/***********************/
 
-  function getSplitAllocation() external view returns (uint256[] memory) { return (allocations); }
+  function getSplitAllocation() external view returns (uint32[] memory) { return (allocations); }
 
   function isAddressWhitelisted(address _address) external view returns (bool) {return (hasRole(WHITELISTED, _address)); }
   function isAddressAdmin(address _address) external view returns (bool) {return (hasRole(DEFAULT_ADMIN_ROLE, _address)); }

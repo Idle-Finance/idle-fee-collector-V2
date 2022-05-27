@@ -22,7 +22,7 @@ contract UniswapV2Exchange is IExchange, Ownable {
       uniswapRouterV2 = IUniswapV2Router02(router_);
   }
 
-  function exchange(address token, uint amountMinOut, address to, address[] calldata path, bytes memory data) external override onlyOwner returns(uint256 amountOut) {
+  function exchange(address token, uint amountMinOut, address to, address[] calldata path, bytes calldata data) external override onlyOwner returns(uint256 amountOut) {
 
     uint256 amountIn = IERC20(token).balanceOf(address(this));
     (amountOut,) = getAmoutOut(path[0], path[1], amountIn);

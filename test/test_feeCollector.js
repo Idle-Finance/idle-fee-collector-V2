@@ -139,7 +139,7 @@ contract("FeeCollector", async accounts => {
     let depositAmount = web3.utils.toWei("500")
     await this.mockDAI.transfer(this.feeCollectorInstance.address, depositAmount)
     const depositTokensEnabled = [true]
-    const managers = await this.feeCollectorInstance._previewDeposit.call(depositTokensEnabled)
+    const managers = await this.feeCollectorInstance.previewDeposit.call(depositTokensEnabled)
     await this.feeCollectorInstance.deposit(depositTokensEnabled, [0], managers) 
     
     let feeTreasuryWethBalanceAfter = BNify(await this.mockWETH.balanceOf.call(addresses.feeTreasuryAddress))
@@ -205,7 +205,7 @@ contract("FeeCollector", async accounts => {
     let feeTreasuryWethBalanceBefore = BNify(await this.mockWETH.balanceOf.call(addresses.feeTreasuryAddress))
     let idleRebalancerWethBalanceBefore =  BNify(await this.mockWETH.balanceOf.call(addresses.idleRebalancer))
     const depositTokensEnabled = [true]
-    const managers = await this.feeCollectorInstance._previewDeposit.call(depositTokensEnabled)
+    const managers = await this.feeCollectorInstance.previewDeposit.call(depositTokensEnabled)
     await this.feeCollectorInstance.deposit(depositTokensEnabled, [0], managers, {from: this.feeCollectorOwner})
 
     let feeTreasuryWethBalanceAfter = BNify(await this.mockWETH.balanceOf.call(addresses.feeTreasuryAddress))
@@ -263,7 +263,7 @@ contract("FeeCollector", async accounts => {
     let depositAmount = web3.utils.toWei("50")
     await this.mockDAI.transfer(this.feeCollectorInstance.address, depositAmount, {from: this.feeCollectorOwner})
     const depositTokensEnabled = [true]
-    const managers = await this.feeCollectorInstance._previewDeposit.call(depositTokensEnabled)
+    const managers = await this.feeCollectorInstance.previewDeposit.call(depositTokensEnabled)
     await this.feeCollectorInstance.deposit(depositTokensEnabled, [0],managers, {from: this.feeCollectorOwner})
 
     let feeTreasuryWethBalanceAfter = BNify(await this.mockWETH.balanceOf.call(addresses.feeTreasuryAddress))
@@ -334,7 +334,7 @@ contract("FeeCollector", async accounts => {
       minTokenBalance.push(1)
     }
 
-    const managers = await this.feeCollectorInstance._previewDeposit.call(tokensEnables)
+    const managers = await this.feeCollectorInstance.previewDeposit.call(tokensEnables)
     await this.feeCollectorInstance.deposit(tokensEnables, minTokenBalance, managers)
   })
 

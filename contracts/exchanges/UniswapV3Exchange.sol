@@ -32,7 +32,7 @@ contract UniswapV3Exchange is IExchange, Ownable {
 
   }
 
-  function exchange(address token, uint amountMinOut, address to, address[] calldata path, bytes memory data) external override onlyOwner returns(uint256 amountOut) {
+  function exchange(address token, uint amountMinOut, address to, address[] calldata path, bytes calldata data) external override onlyOwner returns(uint256 amountOut) {
 
     uint256 _amountIn = IERC20(token).balanceOf(address(this));
 
@@ -58,23 +58,24 @@ contract UniswapV3Exchange is IExchange, Ownable {
   }
 
   function getAmoutOut(address tokenA, address tokenB, uint amountIn) public override onlyOwner returns (uint amountOut, bytes memory data) {
-    uint256 _currentAmountOut;
-    uint256 _MaxAmountOut = 0;
+    uint256 _amountOut;
+    uint256 _maxAmountOut = 0;
     uint24 _fee;
+    uint24[] memory _poolFees = poolFees;
 
-    for (uint256 index = 0; index < poolFees.length; index++) {
-      if(uniswapFactoryV3.getPool(tokenA, tokenB, poolFees[index]) == address(0)) {
+    for (uint8 index = 0; index < _poolFees.length; ++index) {
+      if (uniswapFactoryV3.getPool(tokenA, tokenB, _poolFees[index]) == address(0)) {
         continue;
       }
-      _currentAmountOut =  uniswapQuoterV3.quoteExactInputSingle(tokenA, tokenB, poolFees[index], amountIn, 0);
+      _amountOut =  uniswapQuoterV3.quoteExactInputSingle(tokenA, tokenB, _poolFees[index], amountIn, 0);
 
-      if(_currentAmountOut > _MaxAmountOut)  {
-        _MaxAmountOut = _currentAmountOut;
-        _fee = poolFees[index];
+      if (_amountOut > _maxAmountOut)  {
+        _maxAmountOut = _amountOut;
+        _fee = _poolFees[index];
       }
     }
 
-    amountOut = _MaxAmountOut;
+    amountOut = _maxAmountOut;
     data = abi.encode(_fee);
   }
 

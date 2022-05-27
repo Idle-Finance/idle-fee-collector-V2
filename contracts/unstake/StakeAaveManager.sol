@@ -15,7 +15,6 @@ contract StakeAaveManager is IStakeManager , Ownable {
 
   constructor (address _aave, address _stakeAave) {
     StkAave = IStakedAave(_stakeAave);
-
     Aave = IERC20(_aave);
   }
 
@@ -39,9 +38,8 @@ contract StakeAaveManager is IStakeManager , Ownable {
           // redeem stkAave AND begin new cooldown
           StkAave.redeem(address(this), type(uint256).max);
 
-          uint256 currentBa =  Aave.balanceOf(address(this));
-
-          Aave.safeTransfer(msg.sender, currentBa);
+          uint256 aaveBalance =  Aave.balanceOf(address(this));
+          Aave.safeTransfer(msg.sender, aaveBalance);
         }
       } else {
         // If it is not over, do nothing
@@ -49,9 +47,9 @@ contract StakeAaveManager is IStakeManager , Ownable {
       }
     }
     
-    uint256 balance  = StkAave.balanceOf(msg.sender);
-    if(balance >  0 ) {
-      IERC20(address(StkAave)).safeTransferFrom(msg.sender, address(this), balance);
+    uint256 stkAaveBalance  = StkAave.balanceOf(msg.sender);
+    if (stkAaveBalance >  0 ) {
+      IERC20(address(StkAave)).safeTransferFrom(msg.sender, address(this), stkAaveBalance);
     }
 
     // If there's no pending cooldown or we just redeem the prev locked rewards,
@@ -69,6 +67,5 @@ contract StakeAaveManager is IStakeManager , Ownable {
   function stakedToken() external view override returns (address) {
     return address(StkAave);
   }
-
 
 }
