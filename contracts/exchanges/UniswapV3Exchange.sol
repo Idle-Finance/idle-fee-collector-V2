@@ -35,6 +35,8 @@ contract UniswapV3Exchange is IExchange, Ownable {
   function exchange(address token, uint amountMinOut, address to, address[] calldata path, bytes calldata data) external override onlyOwner returns(uint256 amountOut) {
 
     uint256 _amountIn = IERC20(token).balanceOf(address(this));
+    
+    IERC20(token).safeIncreaseAllowance(address(uniswapRouterV3), _amountIn);
 
     address _tokenIn = path[0];
     address _tokenOut = path[1];
@@ -42,6 +44,8 @@ contract UniswapV3Exchange is IExchange, Ownable {
     uint24 poolFee;
 
     (poolFee)= abi.decode(data, (uint24));
+
+
 
     ISwapRouter.ExactInputSingleParams memory params =  ISwapRouter.ExactInputSingleParams({
         tokenIn: _tokenIn,
@@ -77,13 +81,5 @@ contract UniswapV3Exchange is IExchange, Ownable {
 
     amountOut = _maxAmountOut;
     data = abi.encode(_fee);
-  }
-
-  function approveToken(address _depositToken, uint256 amount) external override  onlyOwner {
-    IERC20(_depositToken).safeIncreaseAllowance(address(uniswapRouterV3), amount);
-  }
-
-  function removeApproveToken(address _token) external override onlyOwner {
-    IERC20(_token).safeApprove(address(uniswapRouterV3), 0);
   }
 }

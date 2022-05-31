@@ -27,6 +27,8 @@ contract UniswapV2Exchange is IExchange, Ownable {
     uint256 amountIn = IERC20(token).balanceOf(address(this));
     (amountOut,) = getAmoutOut(path[0], path[1], amountIn);
 
+    IERC20(token).safeIncreaseAllowance(address(uniswapRouterV2), amountIn);
+
     uniswapRouterV2.swapExactTokensForTokensSupportingFeeOnTransferTokens(
       amountIn,
       amountMinOut, 
@@ -57,13 +59,5 @@ contract UniswapV2Exchange is IExchange, Ownable {
     (uint reserveA, uint reserveB) = tokenA == token0 ? (reserve0, reserve1) : (reserve1, reserve0);
 
     amountOut = uniswapRouterV2.getAmountOut(amountIn, reserveA, reserveB);
-  }
-
-  function approveToken(address _depositToken, uint256 amount) external override onlyOwner {
-    IERC20(_depositToken).safeIncreaseAllowance(address(uniswapRouterV2), amount);
-  }
-
-  function removeApproveToken(address _token) external override onlyOwner {
-    IERC20(_token).safeApprove(address(uniswapRouterV2), 0);
   }
 }

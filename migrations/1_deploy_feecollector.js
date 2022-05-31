@@ -20,7 +20,6 @@ module.exports = async function (deployer, network, accounts) {
   const stakeManager = await StakeAaveManager.deployed()
 
   const initializationArgs = [
-    _addresses.weth,
     [_addresses.feeTreasuryAddress, _addresses.idleRebalancer],
     [80000, 20000],
     _addresses.feeTokens,
