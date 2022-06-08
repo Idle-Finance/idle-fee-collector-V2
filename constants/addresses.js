@@ -8,16 +8,34 @@ const addresses = {
     uniswapV3FactoryAddress:'0x1F98431c8aD98523631AE4a59f267346ea31F984',
     swapRouter:"0xE592427A0AEce92De3Edee1F18E0157C05861564",
     quoter: '0xb27308f9F90D607463bb33eA1BeBb41C27CE5AB6',
+    depositZap: '0xA79828DF1850E8a3A3064576f380D90aECDD3359',
     // development addresses
     weth: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2', // https://etherscan.io/token/0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2
     dai: '0x6b175474e89094c44da98b954eedeac495271d0f', // https://etherscan.io/token/0x6b175474e89094c44da98b954eedeac495271d0f
     idle: '0x875773784Af8135eA0ef43b5a374AaD105c5D39e', // https://developers.idle.finance/contracts-and-codebase
     aave: '0x7Fc66500c84A76Ad7e9c93437bFc5Ac33E2DDaE9',  // https://etherscan.io/token/0x7Fc66500c84A76Ad7e9c93437bFc5Ac33E2DDaE9 
+    steth: '0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84', // https://etherscan.io/token/0xae7ab96520de3a18e5e111b5eaab095312d7fe84
+    frax: "0x853d955aCEf822Db058eb8505911ED77F175b99e",
+    mim: "0x99D8a9C45b2ecA8864373A26D1459e3Dff1e17F3",
     // idle contracts
     feeTreasuryAddress: '0x69a62C24F16d4914a48919613e8eE330641Bcb94', // https://developers.idle.finance/contracts-and-codebase
     ecosystemFund: '0xb0aA1f98523Ec15932dd5fAAC5d86e57115571C7',
     timelock: '0xD6dABBc2b275114a2366555d6C481EF08FDC2556', // timelock address
     governor: '0x2256b25CFC8E35c3135664FD03E77595042fe31B',
+    // tranche tokens
+    FRAX3CRV: "0xd632f22692FaC7611d2AA1C0D552930D43CAEd3B",
+    MIM3CRV: "0x5a6A4D54456819380173272A5E8E9B9904BdF41B",
+    // curve polls
+    FRAX3CRVpool: "0xd632f22692FaC7611d2AA1C0D552930D43CAEd3B",
+    MIM3CRVpool: "0x5a6A4D54456819380173272A5E8E9B9904BdF41B",
+    // tranche addresses
+    FRAX3CrvTranche: '0x4CCaf1392a17203eDAb55a1F2aF3079A8Ac513E7',
+    MIM3CRVTranche: '0x151e89e117728AC6c93aae94C621358B0EBD1866',
+    STETHTranche: '0x34dCd573C5dE4672C8248cd12A99f875Ca112Ad8',
+    // gauge addresses
+    fraxGauges: '0x7ca919Cf060D95B3A51178d9B1BCb1F324c8b693',
+    minGauges: '0x8cC001dd6C9f8370dB99c1e098e13215377Ecb95',
+    stethGauges: '0x675eC042325535F6e176638Dd2d4994F645502B9',
 
     // fee tokens
     feeTokens: [

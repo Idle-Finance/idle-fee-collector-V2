@@ -18,7 +18,7 @@ contract StakeAaveManager is IStakeManager , Ownable {
     Aave = IERC20(_aave);
   }
 
-  function COOLDOWN_SECONDS() external view override onlyOwner returns (uint256) {
+  function COOLDOWN_SECONDS() external view onlyOwner returns (uint256) {
     return StkAave.COOLDOWN_SECONDS();
   }
 
