@@ -60,7 +60,7 @@ contract StakeAaveManager is IStakeManager , Ownable {
     }
   }
 
-  function token() external view override returns (address) {
+  function token() external view returns (address) {
     return address(Aave);
   }
 

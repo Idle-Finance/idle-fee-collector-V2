@@ -8,12 +8,19 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 
 import "./interfaces/IExchange.sol";
 import "./interfaces/IStakeManager.sol";
+import "./interfaces/IDistributorProxy.sol";
 
 contract FeeCollector is Initializable, AccessControlUpgradeable {
 
   using SafeERC20Upgradeable for IERC20Upgradeable;
 
+  struct StakeManager { 
+    address _stakeManager;
+    bool _isTrunchesToken;
+   }
+   
   IERC20Upgradeable private constant Weth = IERC20Upgradeable(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
+  IDistributorProxy private constant DistributorProxy = IDistributorProxy(0x074306BC6a6Fc1bD02B425dd41D742ADf36Ca9C6);
 
   IExchange[] public ExchangeManagers;
   IStakeManager[] public StakeManagers;
@@ -43,7 +50,7 @@ contract FeeCollector is Initializable, AccessControlUpgradeable {
     uint256[] calldata _allocations,
     address[] calldata _initialDepositTokens,
     address[] calldata _exchangeManagers,
-    address[] calldata _stakeManagers
+    StakeManager[] calldata _stakeManagers
   ) initializer public {
     
     // get managers
@@ -141,13 +148,17 @@ contract FeeCollector is Initializable, AccessControlUpgradeable {
   }
 
 	// cannot set an existing stake manager
-  function addStakeManager(address stakeAddress) external onlyAdmin {
-    require(stakeManagerExists[stakeAddress] == false, "Duplicate stake manager");
-    require(stakeAddress != address(0), "Steke Manager cannot be 0 address");
+  function addStakeManager(StakeManager calldata _stake) external onlyAdmin {
+    require(stakeManagerExists[_stake._stakeManager] == false, "Duplicate stake manager");
+    require(_stake._stakeManager != address(0), "Steke Manager cannot be 0 address");
+
+    if (_stake._isTrunchesToken) {
+      DistributorProxy.toggle_approve_distribute(_stake._stakeManager);
+    }
     
-    IStakeManager stake = IStakeManager(stakeAddress);
+    IStakeManager stake = IStakeManager(_stake._stakeManager);
     StakeManagers.push(stake);
-    stakeManagerExists[stakeAddress] = true;
+    stakeManagerExists[_stake._stakeManager] = true;
   }
 
 	// replaces the last stake manager with the one on the given index
@@ -249,12 +260,15 @@ contract FeeCollector is Initializable, AccessControlUpgradeable {
 	/*****  INTERNAL   *****/
 	/***********************/
 
-	function _setStakeManagers(address[] calldata _stakeManagers) internal {
+	function _setStakeManagers(StakeManager[] calldata _stakeManagers) internal {
     for (uint256 index = 0; index < _stakeManagers.length; ++index) {
-      require(stakeManagerExists[_stakeManagers[index]] == false, "Duplicate stake manager");
-      require(_stakeManagers[index] != address(0), "Stake Manager cannot be 0 address");
-      stakeManagerExists[_stakeManagers[index]] = true;
-      StakeManagers.push(IStakeManager(_stakeManagers[index]));
+      require(stakeManagerExists[_stakeManagers[index]._stakeManager] == false, "Duplicate stake manager");
+      require(_stakeManagers[index]._stakeManager != address(0), "Stake Manager cannot be 0 address");
+      if (_stakeManagers[index]._isTrunchesToken) {
+        DistributorProxy.toggle_approve_distribute(_stakeManagers[index]._stakeManager);
+      }
+      stakeManagerExists[_stakeManagers[index]._stakeManager] = true;
+      StakeManagers.push(IStakeManager(_stakeManagers[index]._stakeManager));
     }
   }
 
@@ -394,7 +408,7 @@ contract FeeCollector is Initializable, AccessControlUpgradeable {
         if (_stakeManagers[i].stakedToken() == _unstakeTokens[y]) {
           unstakeToken = IERC20Upgradeable(_unstakeTokens[y]);
           tokenBalance = unstakeToken.balanceOf(address(this));
-
+          
           unstakeToken.safeApprove(address(_stakeManagers[i]), tokenBalance);
           _stakeManagers[i].claimStaked();
           unstakeToken.safeApprove(address(_stakeManagers[i]), 0);

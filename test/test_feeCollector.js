@@ -7,25 +7,30 @@ const IUniswapV2Router02 = artifacts.require('IUniswapV2Router02')
 const UniswapV2Exchange = artifacts.require('UniswapV2Exchange')
 const UniswapV3Exchange = artifacts.require('UniswapV3Exchange')
 const StakeAaveManager = artifacts.require('StakeAaveManager')
-const StakeTranchesManager = artifacts.require('StakeTranchesManager')
+const StakeStEthTranchesManager = artifacts.require('StakeStEthTranchesManager')
+const StakeCrvTranchesManager = artifacts.require('StakeCrvTranchesManager')
 const IWETH = artifacts.require('IWETH')
 
 const mockERC20 = artifacts.require('ERC20Mock')
 
 const IStakedAave = artifacts.require('IStakedAave')
+const ICrvPool = artifacts.require('ICrvPool')
 const IDepositZap = artifacts.require('IDepositZap')
 const IIdleCDO = artifacts.require('IIdleCDO')
 const ILiquidityGaugeV3 = artifacts.require('ILiquidityGaugeV3')
+const IDistributorProxy = artifacts.require('IDistributorProxy')
 
 const { increaseTo } = require('../utilities/rpc')
 const { swap: swapUniswapV2 } = require('../utilities/exchanges/uniswapV2')
-const { addLiquidity: addLiquidityUniswapV3}= require('../utilities/exchanges/uniswapV3')
+const { addLiquidity: addLiquidityUniswapV3, swap: swapUniswapV3}= require('../utilities/exchanges/uniswapV3')
 const {deployProxy} = require('../utilities/proxy')
 const addresses = require("../constants/addresses").development
 const { abi: ERC20abi } = require('@openzeppelin/contracts/build/contracts/ERC20.json');
 const { web3 } = require('@openzeppelin/test-helpers/src/setup');
 
 const BNify = n => new BN(String(n))
+const TOKEN_DESIMAL = (decimals) => new BN('10').pow(new BN(decimals));
+const WEEK_SEC = new BN(604800)
 
 contract("FeeCollector", async accounts => {
   beforeEach(async function(){
@@ -292,8 +297,7 @@ contract("FeeCollector", async accounts => {
     
     await this.feeCollectorInstance.claimStakedToken([gauge.address])
   })
-
-  it.only("Should unstake tranche tokens stEHT and deposit tokens with split set to 50/50", async function () {
+  it("Should unstake tranche tokens stEHT and deposit tokens with split set to 50/50", async function () {
     const underliningToken = new web3.eth.Contract(ERC20abi, addresses.steth)
 
     await swapUniswapV2(1, underliningToken._address, addresses.weth, this.provider, this.feeCollectorOwner)
@@ -313,32 +317,41 @@ contract("FeeCollector", async accounts => {
     const balanceGaugeToken = await gauge.balanceOf(this.feeCollectorOwner)
     await gauge.transfer(this.feeCollectorInstance.address, balanceGaugeToken)
 
-    const stakeTranchesManager = await StakeTranchesManager.new(gauge.address, underliningToken._address, tranche.address)
+    const rewardsTokens = [addresses.lido, addresses.idle]
+    const stakeTranchesManager = await StakeStEthTranchesManager.new(gauge.address, underliningToken._address, rewardsTokens, tranche.address)
     await stakeTranchesManager.transferOwnership(this.feeCollectorInstance.address, {from: this.feeCollectorOwner})
-    await this.feeCollectorInstance.addStakeManager(stakeTranchesManager.address)
+    const stakeManager = {_stakeManager: stakeTranchesManager.address, _isTrunchesToken: true}
+    await this.feeCollectorInstance.addStakeManager(stakeManager)
+    const rewardsTokensContract = rewardsTokens.map((rewardToken) => new web3.eth.Contract(ERC20abi, rewardToken))
 
+    await increaseTo(WEEK_SEC.mul(new BN(2)))
     await this.feeCollectorInstance.claimStakedToken([gauge.address])
 
     await this.feeCollectorInstance.setSplitAllocation([this.ratio_one_pecrent.mul(BNify('50')), this.ratio_one_pecrent.mul(BNify('50'))])
 
     await this.feeCollectorInstance.registerTokenToDepositList(underliningToken._address)
+    rewardsTokensContract.forEach(async (rewardToken) => {
+      await this.feeCollectorInstance.registerTokenToDepositList(rewardToken._address)
+    })
 
     let feeTreasuryWethBalanceBefore = BNify(await this.Weth.balanceOf.call(addresses.feeTreasuryAddress))
     let idleRebalancerWethBalanceBefore =  BNify(await this.Weth.balanceOf.call(addresses.idleRebalancer))
 
-    const depositTokensEnabled = [true]
+    const depositTokens = [underliningToken, ...rewardsTokensContract]
+    const depositTokensEnabled = await Promise.all(depositTokens.map(async (depositToken) => await depositToken.methods.balanceOf(this.feeCollectorInstance.address).call().then(v => new BN(v).gt(new BN('0')))))
     const previewDeposit = await this.feeCollectorInstance.previewDeposit.call(depositTokensEnabled)
     const managers = previewDeposit[0]
     const data = previewDeposit[1]
-    await this.feeCollectorInstance.deposit(depositTokensEnabled, [0],  managers, data, {from: this.feeCollectorOwner})
+    const minTokenOut = depositTokens.map(() => 0)
+    await this.feeCollectorInstance.deposit(depositTokensEnabled, minTokenOut,  managers, data, {from: this.feeCollectorOwner})
 
     let feeTreasuryWethBalanceAfter = BNify(await this.Weth.balanceOf.call(addresses.feeTreasuryAddress))
     let idleRebalancerWethBalanceAfter = BNify(await this.Weth.balanceOf.call(addresses.idleRebalancer))
 
     let feeTreasuryWethBalanceDiff = feeTreasuryWethBalanceAfter.sub(feeTreasuryWethBalanceBefore)
     let idleRebalancerWethBalanceDiff = idleRebalancerWethBalanceAfter.sub(idleRebalancerWethBalanceBefore)
-    
-    expect(idleRebalancerWethBalanceDiff).to.be.bignumber.equal(feeTreasuryWethBalanceDiff)
+
+    expect(idleRebalancerWethBalanceDiff).to.be.bignumber.closeTo(feeTreasuryWethBalanceDiff, TOKEN_DESIMAL(18))
   })
 
   it("Should add a new Stake Manager", async function() {
