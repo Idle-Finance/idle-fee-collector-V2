@@ -12,43 +12,32 @@ import "../interfaces/IDistributorProxy.sol";
 contract StakeStEthTranchesManager is IStakeManager , Ownable {
   using SafeERC20 for IERC20;
 
-  mapping (address => bool) private rewardTokenExists;
+  ILiquidityGaugeV3 private immutable Gauge;
+  IERC20 private immutable UnderlingToken;
+  IERC20 private immutable RewardsToken;
+  IIdleCDO private immutable Tranche;
+  IDistributorProxy private constant DistributorProxy = IDistributorProxy(0x074306BC6a6Fc1bD02B425dd41D742ADf36Ca9C6);
 
-  ILiquidityGaugeV3 private immutable gauge;
-  IERC20 private immutable underlingToken;
-  IERC20[] private rewardsTokens;
-  IIdleCDO private immutable tranche;
-  IDistributorProxy private constant distributorProxy = IDistributorProxy(0x074306BC6a6Fc1bD02B425dd41D742ADf36Ca9C6);
-
-  constructor (address _gauge, address _underlingToken, address[] memory _rewardsTokens, address _tranche) {
+  constructor (address _gauge, address _underlingToken, address _rewardsToken, address _tranche) {
     require(_gauge != address(0), "Gauge cannot be 0 address");
     require(_underlingToken != address(0), "UnderlingToken cannot be 0 address");
     require(_tranche != address(0), "Tranche cannot be 0 address");
-    gauge = ILiquidityGaugeV3(_gauge);
-    underlingToken = IERC20(_underlingToken);
-    tranche = IIdleCDO(_tranche);
-    _setRewardsTokens(_rewardsTokens);
+    Gauge = ILiquidityGaugeV3(_gauge);
+    UnderlingToken = IERC20(_underlingToken);
+    Tranche = IIdleCDO(_tranche);
+    RewardsToken = IERC20(_rewardsToken);
   }
 
   function claimStaked() external onlyOwner {
     _claimStaked();
   }
-
-  function _setRewardsTokens(address[] memory _rewardsToken) internal {
-    for (uint256 index = 0; index < _rewardsToken.length; ++index) {
-      require(rewardTokenExists[_rewardsToken[index]] == false, "Duplicate token");
-      require(_rewardsToken[index] != address(0), "Reward Token cannot be 0 address");
-      rewardTokenExists[_rewardsToken[index]] = true; 
-      rewardsTokens.push(IERC20(_rewardsToken[index]));
-    }
-  }
   
   function _claimStaked() internal {
-    uint256 balance = gauge.balanceOf(msg.sender);
+    uint256 balance = Gauge.balanceOf(msg.sender);
     if (balance == 0) {
       return;
     }
-    IERC20(address(gauge)).safeTransferFrom(msg.sender, address(this), balance);
+    IERC20(address(Gauge)).safeTransferFrom(msg.sender, address(this), balance);
     
     address sender = msg.sender;
     _claimIdle(sender);
@@ -60,42 +49,36 @@ contract StakeStEthTranchesManager is IStakeManager , Ownable {
 
   
   function _claimIdle(address _from) internal {
-    distributorProxy.distribute_for(address(gauge), _from);
+    DistributorProxy.distribute_for(address(Gauge), _from);
   }
 
   function _withdrawAndClaimGauge() internal {
-    uint256 gaugeBalance  = gauge.balanceOf(address(this));
-    gauge.withdraw(gaugeBalance, false);
+    uint256 gaugeBalance  = Gauge.balanceOf(address(this));
+    Gauge.withdraw(gaugeBalance, false);
   }
 
   function _withdrawTranchee() internal{
-    address _trancheAA = tranche.AATranche();
+    address _trancheAA = Tranche.AATranche();
     uint256 _trancheAABalance = IERC20(_trancheAA).balanceOf(address(this));
-    tranche.withdrawAA(_trancheAABalance);
+    Tranche.withdrawAA(_trancheAABalance);
   }
 
   function _transferRewardsTokens() internal {
-    IERC20[] memory _rewardsTokens = rewardsTokens;
-    uint256 _rewardsTokenBalance;
-    for (uint256 index = 0; index < _rewardsTokens.length; ++index) {
-      _rewardsTokenBalance = _rewardsTokens[index].balanceOf(address(this));
-      if (_rewardsTokenBalance > 0) {
-        _rewardsTokens[index].safeTransfer(msg.sender, _rewardsTokenBalance);
-      }
-    }
+    uint256 _rewardsTokenBalance = RewardsToken.balanceOf(address(this));
+    RewardsToken.safeTransfer(msg.sender, _rewardsTokenBalance);
   }
 
   function _transferUnderlingToken(address _to) internal {
-    uint256 _underlingTokenBalance = underlingToken.balanceOf(address(this));
-    underlingToken.safeTransfer(_to, _underlingTokenBalance);
+    uint256 _underlingTokenBalance = UnderlingToken.balanceOf(address(this));
+    UnderlingToken.safeTransfer(_to, _underlingTokenBalance);
   }
 
   function token() external view returns (address) {
-    return address(underlingToken);
+    return address(UnderlingToken);
   }
   
   function stakedToken() external view returns (address){
-    return address(gauge);
+    return address(Gauge);
   }
 
 }

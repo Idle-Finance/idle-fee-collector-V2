@@ -35,7 +35,7 @@ const swap = async (amount, tokenAddress0, tokenAddress1, provider, toAddress) =
 
   const path = [token.address, token2.address]
 
-  const deadline = Math.floor(Date.now() / 1000) + 60 * 30
+  const deadline = '9999999999999'
 
   const maxPriorityFeePerGas = web3.utils.toWei('5', 'gwei')
 

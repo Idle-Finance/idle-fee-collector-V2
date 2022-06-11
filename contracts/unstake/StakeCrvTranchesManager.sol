@@ -15,23 +15,20 @@ contract StakeCrvTranchesManager is IStakeManager , Ownable {
 
   mapping (address => bool) private underlingTokenExists;
 
-  ILiquidityGaugeV3 private immutable gauge;
-  IERC20 private immutable crvLPToken;
-  ICrvPool private immutable crvPool;
-  IERC20[] private underlingTokens;
-  IERC20 private immutable rewardsToken;
-  IIdleCDO private immutable tranche;
-  IDistributorProxy private constant distributorProxy = IDistributorProxy(0x074306BC6a6Fc1bD02B425dd41D742ADf36Ca9C6);
+  ILiquidityGaugeV3 private immutable Gauge;
+  IERC20 private immutable CrvLPToken;
+  ICrvPool private immutable CrvPool;
+  IERC20[] private UnderlingTokens;
+  IIdleCDO private immutable Tranche;
+  IDistributorProxy private constant DistributorProxy = IDistributorProxy(0x074306BC6a6Fc1bD02B425dd41D742ADf36Ca9C6);
 
-  constructor (address _gauge, address[] memory _underlingToken, address _rewardsToken, address _tranche, address _crvPool, address _crvLPToken) {
+  constructor (address _gauge, address[] memory _underlingToken, address _tranche, address _crvPool, address _crvLPToken) {
     require(_gauge != address(0), "Gauge cannot be 0 address");
-    require(_rewardsToken != address(0), "Rewards Token cannot be 0 address");
     require(_tranche != address(0), "Tranche cannot be 0 address");
-    gauge = ILiquidityGaugeV3(_gauge);
-    tranche = IIdleCDO(_tranche);
-    rewardsToken = IERC20(_rewardsToken);
-    crvPool = ICrvPool(_crvPool);
-    crvLPToken = IERC20(_crvLPToken);
+    Gauge = ILiquidityGaugeV3(_gauge);
+    Tranche = IIdleCDO(_tranche);
+    CrvPool = ICrvPool(_crvPool);
+    CrvLPToken = IERC20(_crvLPToken);
     _setUnderlingTokens(_underlingToken);
   }
 
@@ -44,49 +41,43 @@ contract StakeCrvTranchesManager is IStakeManager , Ownable {
       require(underlingTokenExists[_token[index]] == false, "Duplicate token");
       require(_token[index] != address(0), "Underling token cannot be 0 address");
       underlingTokenExists[_token[index]] = true; 
-      underlingTokens.push(IERC20(_token[index]));
+      UnderlingTokens.push(IERC20(_token[index]));
     }
   }
   
   function _claimStaked() internal {
-    uint256 balance = gauge.balanceOf(msg.sender);
+    uint256 balance = Gauge.balanceOf(msg.sender);
     if (balance == 0) {
       return;
     }
-    IERC20(address(gauge)).safeTransferFrom(msg.sender, address(this), balance);
+    IERC20(address(Gauge)).safeTransferFrom(msg.sender, address(this), balance);
     
     address sender = msg.sender;
     _claimIdle(sender);
     _withdrawAndClaimGauge();
     _withdrawTranchee();
     _removeLiquidity();
-    _transferRewardsTokens();
     _transferUnderlingToken(sender);
   }
 
   
   function _claimIdle(address _from) internal {
-    distributorProxy.distribute_for(address(gauge), _from);
+    DistributorProxy.distribute_for(address(Gauge), _from);
   }
 
   function _withdrawAndClaimGauge() internal {
-    uint256 gaugeBalance  = gauge.balanceOf(address(this));
-    gauge.withdraw(gaugeBalance, false);
+    uint256 gaugeBalance  = Gauge.balanceOf(address(this));
+    Gauge.withdraw(gaugeBalance, false);
   }
 
   function _withdrawTranchee() internal{
-    address _trancheAA = tranche.AATranche();
+    address _trancheAA = Tranche.AATranche();
     uint256 _trancheAABalance = IERC20(_trancheAA).balanceOf(address(this));
-    tranche.withdrawAA(_trancheAABalance);
-  }
-
-  function _transferRewardsTokens() internal {
-    uint256 _rewardsTokenBalance = rewardsToken.balanceOf(address(this));
-    rewardsToken.safeTransfer(msg.sender, _rewardsTokenBalance);
+    Tranche.withdrawAA(_trancheAABalance);
   }
 
   function _transferUnderlingToken(address _to) internal {
-    IERC20[] memory _underlingTokens = underlingTokens;
+    IERC20[] memory _underlingTokens = UnderlingTokens;
     uint256 _underlingTokenBalance;
     for (uint256 index = 0; index < _underlingTokens.length; ++index) {
       _underlingTokenBalance = _underlingTokens[index].balanceOf(address(this));
@@ -96,19 +87,19 @@ contract StakeCrvTranchesManager is IStakeManager , Ownable {
   }
 
   function _removeLiquidity() internal {
-    uint256 _balanceCRVToken = crvLPToken.balanceOf(address(this));
+    uint256 _balanceCRVToken = CrvLPToken.balanceOf(address(this));
     uint256[2] memory _minAmounts;
     _minAmounts[0] = 0;
     _minAmounts[1] = 0;
-    crvPool.remove_liquidity(_balanceCRVToken, _minAmounts);
+    CrvPool.remove_liquidity(_balanceCRVToken, _minAmounts);
   }
 
   function token() external view returns (IERC20[] memory) {
-    return underlingTokens;
+    return UnderlingTokens;
   }
   
   function stakedToken() external view returns (address){
-    return address(gauge);
+    return address(Gauge);
   }
 
 }

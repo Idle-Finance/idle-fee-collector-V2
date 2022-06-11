@@ -4,6 +4,8 @@ pragma solidity = 0.8.14;
 import "@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
 import "@uniswap/v3-periphery/contracts/interfaces/IQuoter.sol";
 import "@uniswap/v3-core/contracts/interfaces/IUniswapV3Factory.sol";
+import "@uniswap/v3-core/contracts/interfaces/pool/IUniswapV3PoolState.sol";
+
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -65,13 +67,22 @@ contract UniswapV3Exchange is IExchange, Ownable {
     uint256 _amountOut;
     uint256 _maxAmountOut = 0;
     uint24 _fee;
+    address _pool;
+    uint256 _liquidity;
     uint24[] memory _poolFees = poolFees;
 
     for (uint8 index = 0; index < _poolFees.length; ++index) {
-      if (uniswapFactoryV3.getPool(tokenA, tokenB, _poolFees[index]) == address(0)) {
+      _pool = uniswapFactoryV3.getPool(tokenA, tokenB, _poolFees[index]);
+
+      if (_pool == address(0)) {
         continue;
       }
-      _amountOut =  uniswapQuoterV3.quoteExactInputSingle(tokenA, tokenB, _poolFees[index], amountIn, 0);
+      _liquidity = IUniswapV3PoolState(_pool).liquidity();
+      if(_liquidity == 0) {
+        continue;
+      }
+
+      _amountOut = uniswapQuoterV3.quoteExactInputSingle(tokenA, tokenB, _poolFees[index], amountIn, 0);
 
       if (_amountOut > _maxAmountOut)  {
         _maxAmountOut = _amountOut;
