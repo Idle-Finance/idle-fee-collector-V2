@@ -9,6 +9,7 @@ interface ILiquidityGaugeV3 {
     function integrate_checkpoint() external;
     function user_checkpoint(address account) external;
     function claim_rewards() external;
+    function claim_rewards(address account) external;
     function claim_rewards(address account, address receiver) external;
     function claimable_reward(address account, address token) external view returns(uint256);
     function integrate_fraction(address account) external view returns(uint256);

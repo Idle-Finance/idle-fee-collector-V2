@@ -26,12 +26,15 @@ const evmIncreaseTime = (seconds) => {
   })
 }
 
-const increaseTo = async (amount) => {
-  const target = amount
+const increaseTo = async (target) => {
   const block = await web3.eth.getBlock('latest')
   const now = new BN(block.timestamp)
   const duration = target.sub(now)
   await evmIncreaseTime(duration.toNumber())
 }
 
-module.exports.increaseTo = increaseTo
+const increaseTime = async (amount) => {
+  await evmIncreaseTime(amount)
+}
+
+module.exports = {increaseTo, increaseTime}

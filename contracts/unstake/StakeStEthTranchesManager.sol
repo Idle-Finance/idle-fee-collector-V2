@@ -14,18 +14,16 @@ contract StakeStEthTranchesManager is IStakeManager , Ownable {
 
   ILiquidityGaugeV3 private immutable Gauge;
   IERC20 private immutable UnderlingToken;
-  IERC20 private immutable RewardsToken;
   IIdleCDO private immutable Tranche;
   IDistributorProxy private constant DistributorProxy = IDistributorProxy(0x074306BC6a6Fc1bD02B425dd41D742ADf36Ca9C6);
 
-  constructor (address _gauge, address _underlingToken, address _rewardsToken, address _tranche) {
+  constructor (address _gauge, address _underlingToken, address _tranche) {
     require(_gauge != address(0), "Gauge cannot be 0 address");
     require(_underlingToken != address(0), "UnderlingToken cannot be 0 address");
     require(_tranche != address(0), "Tranche cannot be 0 address");
     Gauge = ILiquidityGaugeV3(_gauge);
     UnderlingToken = IERC20(_underlingToken);
     Tranche = IIdleCDO(_tranche);
-    RewardsToken = IERC20(_rewardsToken);
   }
 
   function claimStaked() external onlyOwner {
@@ -37,13 +35,12 @@ contract StakeStEthTranchesManager is IStakeManager , Ownable {
     if (balance == 0) {
       return;
     }
-    IERC20(address(Gauge)).safeTransferFrom(msg.sender, address(this), balance);
     
     address sender = msg.sender;
+    _claimRewards(sender);
     _claimIdle(sender);
-    _withdrawAndClaimGauge();
+    _withdrawAndClaimGauge(balance);
     _withdrawTranchee();
-    _transferRewardsTokens();
     _transferUnderlingToken(sender);
   }
 
@@ -52,7 +49,12 @@ contract StakeStEthTranchesManager is IStakeManager , Ownable {
     DistributorProxy.distribute_for(address(Gauge), _from);
   }
 
-  function _withdrawAndClaimGauge() internal {
+  function _claimRewards(address _from) internal {
+    Gauge.claim_rewards(_from);
+  }
+
+  function _withdrawAndClaimGauge(uint256 balance) internal {
+    IERC20(address(Gauge)).safeTransferFrom(msg.sender, address(this), balance);
     uint256 gaugeBalance  = Gauge.balanceOf(address(this));
     Gauge.withdraw(gaugeBalance, false);
   }
@@ -61,11 +63,6 @@ contract StakeStEthTranchesManager is IStakeManager , Ownable {
     address _trancheAA = Tranche.AATranche();
     uint256 _trancheAABalance = IERC20(_trancheAA).balanceOf(address(this));
     Tranche.withdrawAA(_trancheAABalance);
-  }
-
-  function _transferRewardsTokens() internal {
-    uint256 _rewardsTokenBalance = RewardsToken.balanceOf(address(this));
-    RewardsToken.safeTransfer(msg.sender, _rewardsTokenBalance);
   }
 
   function _transferUnderlingToken(address _to) internal {
