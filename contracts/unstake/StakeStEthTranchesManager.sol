@@ -9,20 +9,20 @@ import "../interfaces/IIdleCDO.sol";
 import "../interfaces/IStakeManager.sol";
 import "../interfaces/IDistributorProxy.sol";
 
-contract StakeStEthTranchesManager is IStakeManager , Ownable {
+contract StakeStEthTranchesManager is IStakeManager, Ownable {
   using SafeERC20 for IERC20;
 
   ILiquidityGaugeV3 private immutable Gauge;
-  IERC20 private immutable UnderlingToken;
+  IERC20 private immutable UnderlyingToken;
   IIdleCDO private immutable Tranche;
   IDistributorProxy private constant DistributorProxy = IDistributorProxy(0x074306BC6a6Fc1bD02B425dd41D742ADf36Ca9C6);
 
-  constructor (address _gauge, address _underlingToken, address _tranche) {
+  constructor (address _gauge, address _underlyingToken, address _tranche) {
     require(_gauge != address(0), "Gauge cannot be 0 address");
-    require(_underlingToken != address(0), "UnderlingToken cannot be 0 address");
+    require(_underlyingToken != address(0), "UnderlyingToken cannot be 0 address");
     require(_tranche != address(0), "Tranche cannot be 0 address");
     Gauge = ILiquidityGaugeV3(_gauge);
-    UnderlingToken = IERC20(_underlingToken);
+    UnderlyingToken = IERC20(_underlyingToken);
     Tranche = IIdleCDO(_tranche);
   }
 
@@ -41,7 +41,7 @@ contract StakeStEthTranchesManager is IStakeManager , Ownable {
     _claimIdle(sender);
     _withdrawAndClaimGauge(balance);
     _withdrawTranchee();
-    _transferUnderlingToken(sender);
+    _transferUnderlyingToken(sender);
   }
 
   
@@ -65,13 +65,13 @@ contract StakeStEthTranchesManager is IStakeManager , Ownable {
     Tranche.withdrawAA(_trancheAABalance);
   }
 
-  function _transferUnderlingToken(address _to) internal {
-    uint256 _underlingTokenBalance = UnderlingToken.balanceOf(address(this));
-    UnderlingToken.safeTransfer(_to, _underlingTokenBalance);
+  function _transferUnderlyingToken(address _to) internal {
+    uint256 _underlingTokenBalance = UnderlyingToken.balanceOf(address(this));
+    UnderlyingToken.safeTransfer(_to, _underlingTokenBalance);
   }
 
   function token() external view returns (address) {
-    return address(UnderlingToken);
+    return address(UnderlyingToken);
   }
   
   function stakedToken() external view returns (address){

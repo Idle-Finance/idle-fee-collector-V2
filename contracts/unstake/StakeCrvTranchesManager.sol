@@ -10,38 +10,38 @@ import "../interfaces/IStakeManager.sol";
 import "../interfaces/IDistributorProxy.sol";
 import "../interfaces/ICrvPool.sol";
 
-contract StakeCrvTranchesManager is IStakeManager , Ownable {
+contract StakeCrvTranchesManager is IStakeManager, Ownable {
   using SafeERC20 for IERC20;
 
-  mapping (address => bool) private underlingTokenExists;
+  mapping (address => bool) private underlyingTokenExists;
 
   ILiquidityGaugeV3 private immutable Gauge;
   IERC20 private immutable CrvLPToken;
   ICrvPool private immutable CrvPool;
-  IERC20[] private UnderlingTokens;
+  IERC20[] private UnderlyingTokens;
   IIdleCDO private immutable Tranche;
   IDistributorProxy private constant DistributorProxy = IDistributorProxy(0x074306BC6a6Fc1bD02B425dd41D742ADf36Ca9C6);
 
-  constructor (address _gauge, address[] memory _underlingToken, address _tranche, address _crvPool, address _crvLPToken) {
+  constructor (address _gauge, address[] memory _underlyingToken, address _tranche, address _crvPool, address _crvLPToken) {
     require(_gauge != address(0), "Gauge cannot be 0 address");
     require(_tranche != address(0), "Tranche cannot be 0 address");
     Gauge = ILiquidityGaugeV3(_gauge);
     Tranche = IIdleCDO(_tranche);
     CrvPool = ICrvPool(_crvPool);
     CrvLPToken = IERC20(_crvLPToken);
-    _setUnderlingTokens(_underlingToken);
+    _setUnderlyingTokens(_underlyingToken);
   }
 
   function claimStaked() external onlyOwner {
     _claimStaked();
   }
 
-  function _setUnderlingTokens(address[] memory _token) internal {
+  function _setUnderlyingTokens(address[] memory _token) internal {
     for (uint256 index = 0; index < _token.length; ++index) {
-      require(underlingTokenExists[_token[index]] == false, "Duplicate token");
-      require(_token[index] != address(0), "Underling token cannot be 0 address");
-      underlingTokenExists[_token[index]] = true; 
-      UnderlingTokens.push(IERC20(_token[index]));
+      require(underlyingTokenExists[_token[index]] == false, "Duplicate token");
+      require(_token[index] != address(0), "Underlying token cannot be 0 address");
+      underlyingTokenExists[_token[index]] = true; 
+      UnderlyingTokens.push(IERC20(_token[index]));
     }
   }
   
@@ -57,7 +57,7 @@ contract StakeCrvTranchesManager is IStakeManager , Ownable {
     _withdrawAndClaimGauge();
     _withdrawTranchee();
     _removeLiquidity();
-    _transferUnderlingToken(sender);
+    _transferUnderlyingToken(sender);
   }
 
   
@@ -76,12 +76,12 @@ contract StakeCrvTranchesManager is IStakeManager , Ownable {
     Tranche.withdrawAA(_trancheAABalance);
   }
 
-  function _transferUnderlingToken(address _to) internal {
-    IERC20[] memory _underlingTokens = UnderlingTokens;
-    uint256 _underlingTokenBalance;
-    for (uint256 index = 0; index < _underlingTokens.length; ++index) {
-      _underlingTokenBalance = _underlingTokens[index].balanceOf(address(this));
-      _underlingTokens[index].safeTransfer(_to, _underlingTokenBalance);
+  function _transferUnderlyingToken(address _to) internal {
+    IERC20[] memory _underlyingTokens = UnderlyingTokens;
+    uint256 _underlyingTokenBalance;
+    for (uint256 index = 0; index < _underlyingTokens.length; ++index) {
+      _underlyingTokenBalance = _underlyingTokens[index].balanceOf(address(this));
+      _underlyingTokens[index].safeTransfer(_to, _underlyingTokenBalance);
       
     }
   }
@@ -95,7 +95,7 @@ contract StakeCrvTranchesManager is IStakeManager , Ownable {
   }
 
   function token() external view returns (IERC20[] memory) {
-    return UnderlingTokens;
+    return UnderlyingTokens;
   }
   
   function stakedToken() external view returns (address){

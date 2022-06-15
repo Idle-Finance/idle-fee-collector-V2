@@ -18,7 +18,7 @@ const addresses = {
     frax: "0x853d955aCEf822Db058eb8505911ED77F175b99e",
     mim: "0x99D8a9C45b2ecA8864373A26D1459e3Dff1e17F3",
     lido: "0x5A98FcBEA516Cf06857215779Fd812CA3beF1B32",
-    Crv3: '0x6c3F90f043a72FA612cbac8115EE7e52BDe6E490',
+    crv3: '0x6c3F90f043a72FA612cbac8115EE7e52BDe6E490',
     // idle contracts
     feeTreasuryAddress: '0x69a62C24F16d4914a48919613e8eE330641Bcb94', // https://developers.idle.finance/contracts-and-codebase
     ecosystemFund: '0xb0aA1f98523Ec15932dd5fAAC5d86e57115571C7',
@@ -35,9 +35,9 @@ const addresses = {
     MIM3CRVTranche: '0x151e89e117728AC6c93aae94C621358B0EBD1866',
     STETHTranche: '0x34dCd573C5dE4672C8248cd12A99f875Ca112Ad8',
     // gauge addresses
-    fraxGauges: '0x7ca919Cf060D95B3A51178d9B1BCb1F324c8b693',
-    minGauges: '0x8cC001dd6C9f8370dB99c1e098e13215377Ecb95',
-    stethGauges: '0x675eC042325535F6e176638Dd2d4994F645502B9',
+    fraxGauge: '0x7ca919Cf060D95B3A51178d9B1BCb1F324c8b693',
+    mimGauge: '0x8cC001dd6C9f8370dB99c1e098e13215377Ecb95',
+    stethGauge: '0x675eC042325535F6e176638Dd2d4994F645502B9',
     // fee tokens
     feeTokens: [
       '0x2260fac5e5542a773aa44fbcfedf7c193bc2c599', // wbtc

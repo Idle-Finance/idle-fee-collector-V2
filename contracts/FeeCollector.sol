@@ -16,7 +16,7 @@ contract FeeCollector is Initializable, AccessControlUpgradeable {
 
   struct StakeManager { 
     address _stakeManager;
-    bool _isTrunchesToken;
+    bool _isTrancheToken;
    }
    
   IERC20Upgradeable private constant Weth = IERC20Upgradeable(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
@@ -150,9 +150,9 @@ contract FeeCollector is Initializable, AccessControlUpgradeable {
 	// cannot set an existing stake manager
   function addStakeManager(StakeManager calldata _stake) external onlyAdmin {
     require(stakeManagerExists[_stake._stakeManager] == false, "Duplicate stake manager");
-    require(_stake._stakeManager != address(0), "Steke Manager cannot be 0 address");
+    require(_stake._stakeManager != address(0), "Stake Manager cannot be 0 address");
 
-    if (_stake._isTrunchesToken) {
+    if (_stake._isTrancheToken) {
       DistributorProxy.toggle_approve_distribute(_stake._stakeManager);
     }
     
@@ -264,7 +264,7 @@ contract FeeCollector is Initializable, AccessControlUpgradeable {
     for (uint256 index = 0; index < _stakeManagers.length; ++index) {
       require(stakeManagerExists[_stakeManagers[index]._stakeManager] == false, "Duplicate stake manager");
       require(_stakeManagers[index]._stakeManager != address(0), "Stake Manager cannot be 0 address");
-      if (_stakeManagers[index]._isTrunchesToken) {
+      if (_stakeManagers[index]._isTrancheToken) {
         DistributorProxy.toggle_approve_distribute(_stakeManagers[index]._stakeManager);
       }
       stakeManagerExists[_stakeManagers[index]._stakeManager] = true;
@@ -408,7 +408,7 @@ contract FeeCollector is Initializable, AccessControlUpgradeable {
         if (_stakeManagers[i].stakedToken() == _unstakeTokens[y]) {
           unstakeToken = IERC20Upgradeable(_unstakeTokens[y]);
           tokenBalance = unstakeToken.balanceOf(address(this));
-          
+  
           unstakeToken.safeApprove(address(_stakeManagers[i]), tokenBalance);
           _stakeManagers[i].claimStaked();
           unstakeToken.safeApprove(address(_stakeManagers[i]), 0);
@@ -418,8 +418,6 @@ contract FeeCollector is Initializable, AccessControlUpgradeable {
     }
 
   }
-
-
 
 	/***********************/
 	/*****  MODIFIERS  *****/
