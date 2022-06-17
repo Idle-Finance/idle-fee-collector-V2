@@ -22,8 +22,16 @@ contract StakeAaveManager is IStakeManager , Ownable {
     return StkAave.COOLDOWN_SECONDS();
   }
 
-  function claimStaked () external override onlyOwner {
+  function claimStaked (bytes calldata _extraDatas) external override onlyOwner {
     _claimStkAave();
+  }
+
+  function withdrawAdmin(address _toAddress, uint256[] calldata _amounts) external override onlyOwner {
+    IERC20[2] memory _tokens = [Aave, IERC20(address(StkAave))];
+    for (uint256 index = 0; index < _tokens.length; ++index) {
+      if(_amounts[index] == 0) {continue;}
+      _tokens[index].safeTransfer(_toAddress, _amounts[index]);
+    }
   }
 
   function _claimStkAave() internal {

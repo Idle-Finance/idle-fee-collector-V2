@@ -176,8 +176,8 @@ contract FeeCollector is Initializable, AccessControlUpgradeable {
 
 	// find the respective stake manager for each unstake token
 	// and unstakes / starts cooldown for that token
-  function claimStakedToken(address[] calldata _unstakeTokens) external onlyAdmin {
-    _claimStakedToken(_unstakeTokens);
+  function claimStakedToken(address[] calldata _unstakeTokens, bytes[] calldata _extraDatas) external onlyAdmin {
+    _claimStakedToken(_unstakeTokens, _extraDatas);
   }
 
 	// note: call `deposit()` before this function to clear up accrued fees with previous allocations
@@ -247,6 +247,11 @@ contract FeeCollector is Initializable, AccessControlUpgradeable {
 	// moves a specific token to a given address for a given amount
   function withdraw(address _token, address _toAddress, uint256 _amount) external onlyAdmin {
     IERC20Upgradeable(_token).safeTransfer(_toAddress, _amount);
+  }
+
+	// moves tokens from a stake manager to a given address for a given amount
+  function withdrawFromStakeManager(address _stakeManager, address _toAddress, uint256[] calldata _amounts) external onlyAdmin {
+    IStakeManager(_stakeManager).withdrawAdmin(_toAddress, _amounts);
   }
 
 	// there can only be one admin
@@ -398,7 +403,8 @@ contract FeeCollector is Initializable, AccessControlUpgradeable {
     return amountWeth;
   }
 
-  function _claimStakedToken(address[] calldata _unstakeTokens) internal {
+  function _claimStakedToken(address[] calldata _unstakeTokens, bytes[] calldata _extraDatas) internal {
+    require(_unstakeTokens.length == _extraDatas.length, "Invalid length");
     IStakeManager[] memory _stakeManagers = StakeManagers;
     IERC20Upgradeable unstakeToken;
     uint256 tokenBalance;
@@ -410,7 +416,7 @@ contract FeeCollector is Initializable, AccessControlUpgradeable {
           tokenBalance = unstakeToken.balanceOf(address(this));
   
           unstakeToken.safeApprove(address(_stakeManagers[i]), tokenBalance);
-          _stakeManagers[i].claimStaked();
+          _stakeManagers[i].claimStaked(_extraDatas[y]);
           unstakeToken.safeApprove(address(_stakeManagers[i]), 0);
           break;
         }
