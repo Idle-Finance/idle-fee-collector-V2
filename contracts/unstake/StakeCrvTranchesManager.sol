@@ -51,6 +51,7 @@ contract StakeCrvTranchesManager is IStakeManager, Ownable, StakeManagerTranches
       (uint256[2] memory _minAmounts) = abi.decode(_stakeTokens[index]._extraData, (uint256[2]));
 
       _claimIdle(_stakedToken, sender);
+      _claimRewards(_stakedToken, sender);
       _withdrawAndClaimGauge(_stakedToken, sender);
       _withdrawTranchee(_stakedToken);
       _removeLiquidity(_stakedToken, _minAmounts);
