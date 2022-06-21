@@ -12,52 +12,57 @@ import "../interfaces/IStakeManager.sol";
 contract StakeManagerTranches  {
   using SafeERC20 for IERC20;
 
-  mapping (address => bool) private underlyingTokenExists;
 
-  ILiquidityGaugeV3 private immutable Gauge;
-  IIdleCDO private immutable Tranche;
-  IERC20[] private UnderlyingTokens;
+  struct TokenBaseInterfaces {
+    ILiquidityGaugeV3 gauge;
+    IIdleCDO tranche;
+    IERC20[] underlyingTokens;
+  }
+
+  mapping (address => TokenBaseInterfaces) private tokenBaseInterfaces;
+  address[] private gaugeTokens;
+
   IDistributorProxy private constant DistributorProxy = IDistributorProxy(0x074306BC6a6Fc1bD02B425dd41D742ADf36Ca9C6);
 
-  constructor (address _gauge, address[] memory _underlyingToken, address _tranche) {
-    require(_gauge != address(0), "Gauge cannot be 0 address");
-    require(_tranche != address(0), "Tranche cannot be 0 address");
-    Gauge = ILiquidityGaugeV3(_gauge);
-    Tranche = IIdleCDO(_tranche);
-    _setUnderlyingTokens(_underlyingToken);
-  }
-
-  function _setUnderlyingTokens(address[] memory _token) internal {
-    for (uint256 index = 0; index < _token.length; ++index) {
-      require(underlyingTokenExists[_token[index]] == false, "Duplicate token");
-      require(_token[index] != address(0), "Underlying token cannot be 0 address");
-      underlyingTokenExists[_token[index]] = true; 
-      UnderlyingTokens.push(IERC20(_token[index]));
+  constructor (address[] memory _gauges, address[][] memory _underlyingTokens, address[] memory _tranches) {
+    for (uint256 index = 0; index < _gauges.length; index++) {
+      IERC20[] memory _tokens = new IERC20[](_underlyingTokens[index].length);
+      for (uint256 x = 0; x < _underlyingTokens[index].length; x++) {
+        _tokens[x] = IERC20(_underlyingTokens[index][x]);  
+      }
+      tokenBaseInterfaces[_gauges[index]] = TokenBaseInterfaces(ILiquidityGaugeV3(_gauges[index]), IIdleCDO(_tranches[index]), _tokens);
+      gaugeTokens.push(_gauges[index]);
     }
+
   }
 
-  function _claimIdle(address _from) internal {
-    DistributorProxy.distribute_for(address(Gauge), _from);
+  function _claimIdle(address _stakeToken, address _from) internal {
+    TokenBaseInterfaces memory _tokenInterfaces = tokenBaseInterfaces[_stakeToken];
+    DistributorProxy.distribute_for(address(_tokenInterfaces.gauge), _from);
   }
 
-  function _claimRewards(address _from) internal {
-    Gauge.claim_rewards(_from);
+  function _claimRewards(address _stakeToken, address _from) internal {
+    TokenBaseInterfaces memory _tokenInterfaces = tokenBaseInterfaces[_stakeToken];
+    _tokenInterfaces.gauge.claim_rewards(_from);
   }
 
-  function _withdrawAndClaimGauge(address _from) internal {
-    uint256 balance = _gaugeBalance(_from);
-    IERC20(address(Gauge)).safeTransferFrom(_from, address(this), balance);
-    Gauge.withdraw(balance, false);
+  function _withdrawAndClaimGauge(address _stakeToken, address _from) internal {
+    TokenBaseInterfaces memory _tokenInterfaces = tokenBaseInterfaces[_stakeToken];
+    uint256 balance = _gaugeBalance(_stakeToken, _from);
+    IERC20(address(_tokenInterfaces.gauge)).safeTransferFrom(_from, address(this), balance);
+    _tokenInterfaces.gauge.withdraw(balance, false);
   }
 
-  function _withdrawTranchee() internal{
-    address _trancheAA = Tranche.AATranche();
+  function _withdrawTranchee(address _stakeToken) internal{
+    TokenBaseInterfaces memory _tokenInterfaces = tokenBaseInterfaces[_stakeToken];
+    address _trancheAA = _tokenInterfaces.tranche.AATranche();
     uint256 _trancheAABalance = IERC20(_trancheAA).balanceOf(address(this));
-    Tranche.withdrawAA(_trancheAABalance);
+     _tokenInterfaces.tranche.withdrawAA(_trancheAABalance);
   }
 
-  function _transferUnderlyingToken(address _to) internal {
-    IERC20[] memory _underlyingTokens = UnderlyingTokens;
+  function _transferUnderlyingToken(address _stakeToken, address _to) internal {
+    TokenBaseInterfaces memory _tokenInterfaces = tokenBaseInterfaces[_stakeToken];
+    IERC20[] memory _underlyingTokens = _tokenInterfaces.underlyingTokens;
     uint256 _underlyingTokenBalance;
     for (uint256 index = 0; index < _underlyingTokens.length; ++index) {
       _underlyingTokenBalance = _underlyingTokens[index].balanceOf(address(this));
@@ -65,25 +70,38 @@ contract StakeManagerTranches  {
     }
   }
 
-  function _withdrawAdmin(address _toAddress, uint256[] calldata _amounts) internal {
-    require(_amounts.length == UnderlyingTokens.length, "Invalid length");
-    for (uint256 index = 0; index < UnderlyingTokens.length; ++index) {
+  function _withdrawAdmin(address _stakeToken, address _toAddress, uint256[] calldata _amounts) internal {
+    TokenBaseInterfaces memory _tokenInterfaces = tokenBaseInterfaces[_stakeToken];
+    IERC20[] memory _underlyingTokens = _tokenInterfaces.underlyingTokens;
+    require(_amounts.length == _underlyingTokens.length, "Invalid length");
+    for (uint256 index = 0; index < _underlyingTokens.length; ++index) {
       if(_amounts[index] == 0) {continue;}
-      UnderlyingTokens[index].safeTransfer(_toAddress, _amounts[index]);
+      _underlyingTokens[index].safeTransfer(_toAddress, _amounts[index]);
     }
   }
 
-  function _gaugeBalance(address _for) internal returns(uint256 balance){
-    balance = Gauge.balanceOf(_for);
+  function _addStakedToken(address _gauge, address _tranche, address[] calldata _underlyingTokens) internal {
+    require(address(tokenBaseInterfaces[_gauge].gauge) == address(0), "Stake token already exists");
+    IERC20[] memory _tokens = new IERC20[](_underlyingTokens.length);
+    for (uint256 index = 0; index < _underlyingTokens.length; index++) {
+      _tokens[index] = IERC20(_underlyingTokens[index]);  
+    }
+    tokenBaseInterfaces[_gauge] = TokenBaseInterfaces(ILiquidityGaugeV3(_gauge), IIdleCDO(_tranche), _tokens);
+    gaugeTokens.push(_gauge);
   }
 
-
-  function _tokens() internal view returns (IERC20[] memory) {
-    return UnderlyingTokens;
-  }
-  
-  function _stakedToken() internal view returns (address){
-    return address(Gauge);
+  function _removeStakedToken(uint256 _index) internal {
+    delete tokenBaseInterfaces[gaugeTokens[_index]];
+    gaugeTokens[_index] = gaugeTokens[gaugeTokens.length-1];
+    gaugeTokens.pop();
   }
 
+  function _gaugeBalance(address _stakeToken, address _for) internal returns(uint256 balance){
+    TokenBaseInterfaces memory _tokenInterfaces = tokenBaseInterfaces[_stakeToken];
+    balance = _tokenInterfaces.gauge.balanceOf(_for);
+  }
+
+  function _stakedTokens() internal view returns(address[] memory) {
+    return gaugeTokens;
+  }
 }

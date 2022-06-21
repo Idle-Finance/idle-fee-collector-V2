@@ -10,50 +10,62 @@ import "../interfaces/ICrvPool.sol";
 
 contract StakeCrvTranchesManager is IStakeManager, Ownable, StakeManagerTranches {
 
-  IERC20 private immutable CrvLPToken;
-  ICrvPool private immutable CrvPool;
-  
-
-  constructor (address _gauge, address[] memory _underlyingToken, address _tranche, address _crvPool, address _crvLPToken) StakeManagerTranches(_gauge, _underlyingToken, _tranche) {
-    CrvPool = ICrvPool(_crvPool);
-    CrvLPToken = IERC20(_crvLPToken);
+  struct TokenInterfaces {
+    IERC20 CrvLPToken;
+    ICrvPool CrvPool;
   }
 
-  function claimStaked(bytes calldata _extraDatas) external onlyOwner {
-    _claimStaked(_extraDatas);
-  }
+  mapping (address => TokenInterfaces) private tokenInterfaces;
 
-  function withdrawAdmin(address _toAddress, uint256[] calldata _amounts) external override onlyOwner {
-    _withdrawAdmin(_toAddress, _amounts);
-  }
-  
-  function _claimStaked(bytes calldata _extraDatas) internal {
-    address sender = msg.sender;
-    uint256 balance = _gaugeBalance(sender);
-    if (balance == 0) {
-      return;
+  constructor (address[] memory _gauges, address[][] memory _underlyingToken, address[] memory _tranches, address[] memory _crvPools, address[] memory _crvLPTokens) StakeManagerTranches(_gauges, _underlyingToken, _tranches) {
+    for (uint256 index = 0; index < _gauges.length; index++) {
+      tokenInterfaces[_gauges[index]] = TokenInterfaces(IERC20(_crvPools[index]), ICrvPool(_crvLPTokens[index]));
     }
-    (uint256[2] memory _minAmounts) = abi.decode(_extraDatas, (uint256[2]));
-
-    _claimIdle(sender);
-    _withdrawAndClaimGauge(sender);
-    _withdrawTranchee();
-    _removeLiquidity(_minAmounts);
-    _transferUnderlyingToken(sender);
   }
 
-
-  function _removeLiquidity(uint256[2] memory _minAmounts) internal {
-    uint256 _balanceCRVToken = CrvLPToken.balanceOf(address(this));
-    CrvPool.remove_liquidity(_balanceCRVToken, _minAmounts);
+  function claimStaked(StakeToken[] calldata _stakeTokens) external onlyOwner {
+    _claimStaked(_stakeTokens);
   }
 
-  function token() external view returns (IERC20[] memory) {
-    return _tokens();
+  function withdrawAdmin(address _stakeToken, address _toAddress, uint256[] calldata _amounts) external override onlyOwner {
+    _withdrawAdmin(_stakeToken, _toAddress, _amounts);
+  }
+
+  function addStakedToken(address _gauge, address _tranche, address[] calldata _underlyingTokens) external override onlyOwner {
+    _addStakedToken(_gauge, _tranche, _underlyingTokens);
+  }
+
+  function removeStakedToken(uint256 _index) external override onlyOwner {
+    _removeStakedToken(_index);
   }
   
-  function stakedToken() external view returns (address){
-    return _stakedToken();
+  function _claimStaked(StakeToken[] calldata _stakeTokens) internal {
+    address sender = msg.sender;
+    
+    address _stakedToken;
+    for (uint256 index = 0; index < _stakeTokens.length; index++) {
+      _stakedToken = _stakeTokens[index]._address;
+      uint256 balance = _gaugeBalance(_stakedToken, sender);
+      if (balance == 0) {continue;}
+
+      (uint256[2] memory _minAmounts) = abi.decode(_stakeTokens[index]._extraData, (uint256[2]));
+
+      _claimIdle(_stakedToken, sender);
+      _withdrawAndClaimGauge(_stakedToken, sender);
+      _withdrawTranchee(_stakedToken);
+      _removeLiquidity(_stakedToken, _minAmounts);
+      _transferUnderlyingToken(_stakedToken, sender);
+    }
+  }
+
+  function _removeLiquidity(address _stakeToken, uint256[2] memory _minAmounts) internal {
+    TokenInterfaces memory _tokenInterfaces = tokenInterfaces[_stakeToken];
+    uint256 _balanceCRVToken = _tokenInterfaces.CrvLPToken.balanceOf(address(this));
+    _tokenInterfaces.CrvPool.remove_liquidity(_balanceCRVToken, _minAmounts);
+  }
+
+  function stakedTokens() view external override returns(address[] memory) {
+    return _stakedTokens();
   }
 
 }

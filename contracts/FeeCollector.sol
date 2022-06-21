@@ -14,11 +14,6 @@ contract FeeCollector is Initializable, AccessControlUpgradeable {
 
   using SafeERC20Upgradeable for IERC20Upgradeable;
 
-  struct StakeManager { 
-    address _stakeManager;
-    bool _isTrancheToken;
-   }
-   
   IERC20Upgradeable private constant Weth = IERC20Upgradeable(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
   IDistributorProxy private constant DistributorProxy = IDistributorProxy(0x074306BC6a6Fc1bD02B425dd41D742ADf36Ca9C6);
 
@@ -50,7 +45,7 @@ contract FeeCollector is Initializable, AccessControlUpgradeable {
     uint256[] calldata _allocations,
     address[] calldata _initialDepositTokens,
     address[] calldata _exchangeManagers,
-    StakeManager[] calldata _stakeManagers
+    IStakeManager.StakeManager[] calldata _stakeManagers
   ) initializer public {
     
     // get managers
@@ -148,7 +143,7 @@ contract FeeCollector is Initializable, AccessControlUpgradeable {
   }
 
 	// cannot set an existing stake manager
-  function addStakeManager(StakeManager calldata _stake) external onlyAdmin {
+  function addStakeManager(IStakeManager.StakeManager calldata _stake) external onlyAdmin {
     require(stakeManagerExists[_stake._stakeManager] == false, "Duplicate stake manager");
     require(_stake._stakeManager != address(0), "Stake Manager cannot be 0 address");
 
@@ -176,8 +171,8 @@ contract FeeCollector is Initializable, AccessControlUpgradeable {
 
 	// find the respective stake manager for each unstake token
 	// and unstakes / starts cooldown for that token
-  function claimStakedToken(address[] calldata _unstakeTokens, bytes[] calldata _extraDatas) external onlyAdmin {
-    _claimStakedToken(_unstakeTokens, _extraDatas);
+  function claimStakedToken(IStakeManager.UnstakeData[] calldata _unstakeData) external onlyAdmin {
+    _claimStakedToken(_unstakeData);
   }
 
 	// note: call `deposit()` before this function to clear up accrued fees with previous allocations
@@ -217,6 +212,14 @@ contract FeeCollector is Initializable, AccessControlUpgradeable {
     _setSplitAllocation(_newAllocation);
   }
 
+  function addStakedToken(address _stakeManager, address _gauge, address _tranche, address[] calldata _underlyingTokens) external onlyAdmin{
+    IStakeManager(_stakeManager).addStakedToken(_gauge, _tranche, _underlyingTokens);
+  }
+
+  function removeStakedToken(address _stakeManager, uint256 _index) external onlyAdmin {
+    IStakeManager(_stakeManager).removeStakedToken(_index);
+  }
+
 	// this is used for calling deposit at the momemnt
   function addAddressToWhiteList(address _addressToAdd) external onlyAdmin{
     grantRole(WHITELISTED, _addressToAdd);
@@ -250,8 +253,8 @@ contract FeeCollector is Initializable, AccessControlUpgradeable {
   }
 
 	// moves tokens from a stake manager to a given address for a given amount
-  function withdrawFromStakeManager(address _stakeManager, address _toAddress, uint256[] calldata _amounts) external onlyAdmin {
-    IStakeManager(_stakeManager).withdrawAdmin(_toAddress, _amounts);
+  function withdrawFromStakeManager(address _stakeManager, address _stakeToken, address _toAddress, uint256[] calldata _amounts) external onlyAdmin {
+    IStakeManager(_stakeManager).withdrawAdmin(_stakeToken, _toAddress, _amounts);
   }
 
 	// there can only be one admin
@@ -265,7 +268,7 @@ contract FeeCollector is Initializable, AccessControlUpgradeable {
 	/*****  INTERNAL   *****/
 	/***********************/
 
-	function _setStakeManagers(StakeManager[] calldata _stakeManagers) internal {
+	function _setStakeManagers(IStakeManager.StakeManager[] calldata _stakeManagers) internal {
     for (uint256 index = 0; index < _stakeManagers.length; ++index) {
       require(stakeManagerExists[_stakeManagers[index]._stakeManager] == false, "Duplicate stake manager");
       require(_stakeManagers[index]._stakeManager != address(0), "Stake Manager cannot be 0 address");
@@ -403,24 +406,18 @@ contract FeeCollector is Initializable, AccessControlUpgradeable {
     return amountWeth;
   }
 
-  function _claimStakedToken(address[] calldata _unstakeTokens, bytes[] calldata _extraDatas) internal {
-    require(_unstakeTokens.length == _extraDatas.length, "Invalid length");
-    IStakeManager[] memory _stakeManagers = StakeManagers;
+  function _claimStakedToken(IStakeManager.UnstakeData[] calldata _unstakeData) internal {
     IERC20Upgradeable unstakeToken;
     uint256 tokenBalance;
 
-    for (uint256 i = 0; i < _stakeManagers.length; ++i) {
-      for (uint256 y = 0; y < _unstakeTokens.length; ++y) {
-        if (_stakeManagers[i].stakedToken() == _unstakeTokens[y]) {
-          unstakeToken = IERC20Upgradeable(_unstakeTokens[y]);
-          tokenBalance = unstakeToken.balanceOf(address(this));
-  
-          unstakeToken.safeApprove(address(_stakeManagers[i]), tokenBalance);
-          _stakeManagers[i].claimStaked(_extraDatas[y]);
-          unstakeToken.safeApprove(address(_stakeManagers[i]), 0);
-          break;
-        }
+    for (uint256 i = 0; i < _unstakeData.length; ++i) {
+      for (uint256 y = 0; y < _unstakeData[i]._tokens.length; y++) {
+        unstakeToken = IERC20Upgradeable( _unstakeData[i]._tokens[y]._address);
+        tokenBalance = unstakeToken.balanceOf(address(this));
+        unstakeToken.safeIncreaseAllowance(_unstakeData[y]._stakeManager, tokenBalance);
       }
+      
+      IStakeManager(_unstakeData[i]._stakeManager).claimStaked(_unstakeData[i]._tokens);
     }
 
   }

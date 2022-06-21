@@ -179,7 +179,12 @@ contract("FeeCollector", async accounts => {
     
     await this.stakeAaveInstance.transfer(this.feeCollectorInstance.address, stakeAaveBalance, {from: this.feeCollectorOwner, gasLimit: 400000})
     
-    await this.feeCollectorInstance.claimStakedToken([addresses.stakeAave], ['0x'])
+    const unstakeData = [{
+      _stakeManager: this.stakeManager.address,
+      _tokens: [{_address: addresses.stakeAave, _extraData: '0x'}]
+    }]
+    
+    await this.feeCollectorInstance.claimStakedToken(unstakeData)
   
     let feeCollectorbalanceOfStkAave = await this.stakeAaveInstance.balanceOf(this.feeCollectorInstance.address)
 
@@ -187,7 +192,7 @@ contract("FeeCollector", async accounts => {
 
     let feeCollectorBalanceOfAave =  await this.aaveInstance.methods.balanceOf(this.feeCollectorInstance.address).call()
     
-    await this.feeCollectorInstance.claimStakedToken([addresses.stakeAave], ['0x'])
+    await this.feeCollectorInstance.claimStakedToken(unstakeData)
 
     expect(+feeCollectorBalanceOfAave).equal(0)
 
@@ -196,7 +201,7 @@ contract("FeeCollector", async accounts => {
     const cooldownOffset = new BN(1000)
     await increaseTo(stakersCooldown.add(COOLDOWN_SECONDS).add(cooldownOffset))
     
-    await this.feeCollectorInstance.claimStakedToken([addresses.stakeAave], ['0x'])
+    await this.feeCollectorInstance.claimStakedToken(unstakeData)
 
     feeCollectorBalanceOfAave =  await this.aaveInstance.methods.balanceOf(this.feeCollectorInstance.address).call()
     stakeManagerbalanceOfStkAave = await this.stakeAaveInstance.balanceOf(this.stakeManager.address)
@@ -253,10 +258,10 @@ contract("FeeCollector", async accounts => {
     const balanceGaugeToken = await gauge.balanceOf(this.feeCollectorOwner)
     await gauge.transfer(this.feeCollectorInstance.address, balanceGaugeToken)
 
-    const underlyingTokens = [addresses.mim, addresses.crv3]
-    const stakeTranchesManager = await StakeCrvTranchesManager.new(gauge.address, underlyingTokens, tranche.address, addresses.MIM3CRVpool, addresses.MIM3CRV)
+    const underlyingTokens = [[addresses.mim, addresses.crv3]]
+    const stakeTranchesManager = await StakeCrvTranchesManager.new([gauge.address], underlyingTokens, [tranche.address], [addresses.MIM3CRVpool], [addresses.MIM3CRV])
     await stakeTranchesManager.transferOwnership(this.feeCollectorInstance.address, {from: this.feeCollectorOwner})
-    const stakeManager = {_stakeManager: stakeTranchesManager.address, _isTrunchesToken: true}
+    const stakeManager = {_stakeManager: stakeTranchesManager.address, _isTrancheToken: true}
     await this.feeCollectorInstance.addStakeManager(stakeManager)
 
     const uniswapV3Exchange = await UniswapV3Exchange.new(addresses.swapRouter, addresses.quoter, addresses.uniswapV3FactoryAddress)
@@ -266,14 +271,19 @@ contract("FeeCollector", async accounts => {
     await increaseTime(WEEK_SEC * 2)
     const claimData = web3.eth.abi.encodeParameter('uint256[2]', [0,0]);
 
-    await this.feeCollectorInstance.claimStakedToken([gauge.address], [claimData])
+    const unstakeData = [{
+      _stakeManager: stakeTranchesManager.address,
+      _tokens: [{_address: gauge.address, _extraData: claimData}]
+    }]
+
+    await this.feeCollectorInstance.claimStakedToken(unstakeData)
 
     await this.feeCollectorInstance.setSplitAllocation([this.ratio_one_pecrent.mul(BNify('50')), this.ratio_one_pecrent.mul(BNify('50'))])
 
     const feeTreasuryWethBalanceBefore = BNify(await this.Weth.balanceOf.call(addresses.feeTreasuryAddress))
     const idleRebalancerWethBalanceBefore =  BNify(await this.Weth.balanceOf.call(addresses.idleRebalancer))
 
-    const tokens = [...underlyingTokens, addresses.idle]
+    const tokens = [...underlyingTokens[0], addresses.idle]
     const depositTokens = tokens.map((token) => new web3.eth.Contract(ERC20abi, token))
     const rewardToken = depositTokens[2]
     const rewardBalance = await rewardToken.methods.balanceOf(this.feeCollectorInstance.address).call()
@@ -330,25 +340,29 @@ contract("FeeCollector", async accounts => {
     const balanceGaugeToken = await gauge.balanceOf(this.feeCollectorOwner)
     await gauge.transfer(this.feeCollectorInstance.address, balanceGaugeToken)
 
-    const underlyingTokens = [addresses.frax, addresses.crv3]
-    const stakeTranchesManager = await StakeCrvTranchesManager.new(gauge.address, underlyingTokens, tranche.address, addresses.FRAX3CRVpool, addresses.FRAX3CRV)
+    const underlyingTokens = [[addresses.frax, addresses.crv3]]
+    const stakeTranchesManager = await StakeCrvTranchesManager.new([gauge.address], underlyingTokens, [tranche.address], [addresses.FRAX3CRVpool], [addresses.FRAX3CRV])
 
     await stakeTranchesManager.transferOwnership(this.feeCollectorInstance.address, {from: this.feeCollectorOwner})
 
-    const stakeManager = {_stakeManager: stakeTranchesManager.address, _isTrunchesToken: true}
+    const stakeManager = {_stakeManager: stakeTranchesManager.address, _isTrancheToken: true}
     await this.feeCollectorInstance.addStakeManager(stakeManager)
 
     await increaseTime(HOUR_SEC * 2)
     const claimData = web3.eth.abi.encodeParameter('uint256[2]', [0,0]);
 
-    await this.feeCollectorInstance.claimStakedToken([gauge.address], [claimData])
+    const unstakeData = [{
+      _stakeManager: stakeTranchesManager.address,
+      _tokens: [{_address: gauge.address, _extraData: claimData}]
+    }]
+    await this.feeCollectorInstance.claimStakedToken(unstakeData)
 
     await this.feeCollectorInstance.setSplitAllocation([this.ratio_one_pecrent.mul(BNify('50')), this.ratio_one_pecrent.mul(BNify('50'))])
 
     const feeTreasuryWethBalanceBefore = BNify(await this.Weth.balanceOf.call(addresses.feeTreasuryAddress))
     const idleRebalancerWethBalanceBefore =  BNify(await this.Weth.balanceOf.call(addresses.idleRebalancer))
 
-    const tokens = [...underlyingTokens, addresses.idle]
+    const tokens = [...underlyingTokens[0], addresses.idle]
     const depositTokens = tokens.map((token) => new web3.eth.Contract(ERC20abi, token))
     for (const token of depositTokens) {
       await this.feeCollectorInstance.registerTokenToDepositList(token._address)      
@@ -403,14 +417,18 @@ contract("FeeCollector", async accounts => {
     await increaseTime(HOUR_SEC * 2)
     
     const rewardsTokens = [addresses.lido, addresses.idle]
-    const underlyingTokens = [underlyingToken._address]
-    const stakeTranchesManager = await StakeStEthTranchesManager.new(gauge.address, underlyingTokens, tranche.address)
+    const underlyingTokens = [[underlyingToken._address]]
+    const stakeTranchesManager = await StakeStEthTranchesManager.new([gauge.address], underlyingTokens, [tranche.address])
     await stakeTranchesManager.transferOwnership(this.feeCollectorInstance.address, {from: this.feeCollectorOwner})
-    const stakeManager = {_stakeManager: stakeTranchesManager.address, _isTrunchesToken: true}
+    const stakeManager = {_stakeManager: stakeTranchesManager.address, _isTrancheToken: true}
     await this.feeCollectorInstance.addStakeManager(stakeManager)
     const rewardsTokensContract = rewardsTokens.map((rewardToken) => new web3.eth.Contract(ERC20abi, rewardToken))
 
-    await this.feeCollectorInstance.claimStakedToken([gauge.address], ['0x'])
+    const unstakeData = [{
+      _stakeManager: stakeTranchesManager.address,
+      _tokens: [{_address: gauge.address, _extraData: '0x'}]
+    }]
+    await this.feeCollectorInstance.claimStakedToken(unstakeData)
     
     await this.feeCollectorInstance.setSplitAllocation([this.ratio_one_pecrent.mul(BNify('50')), this.ratio_one_pecrent.mul(BNify('50'))])
 
@@ -435,6 +453,23 @@ contract("FeeCollector", async accounts => {
     const idleRebalancerWethBalanceDiff = idleRebalancerWethBalanceAfter.sub(idleRebalancerWethBalanceBefore)
 
     expect(idleRebalancerWethBalanceDiff).to.be.bignumber.closeTo(feeTreasuryWethBalanceDiff, TOKEN_DECIMALS(18))
+  })
+
+  it("Should add and remove a new stake token to CRV stake manager", async function() {
+    const underlyingTokens = [[addresses.frax, addresses.crv3]]
+    const stakeTranchesManager = await StakeCrvTranchesManager.new([addresses.fraxGauge], underlyingTokens, [addresses.FRAX3CrvTranche], [addresses.FRAX3CRVpool], [addresses.FRAX3CRV])
+    await stakeTranchesManager.transferOwnership(this.feeCollectorInstance.address, {from: this.feeCollectorOwner})
+    const stakeManager = {_stakeManager: stakeTranchesManager.address, _isTrancheToken: true}
+    await this.feeCollectorInstance.addStakeManager(stakeManager)
+
+    await this.feeCollectorInstance.addStakedToken(stakeTranchesManager.address, addresses.mimGauge, addresses.MIM3CRVTranche, [addresses.mim, addresses.crv3])
+    
+    let stkedTokens = await stakeTranchesManager.stakedTokens.call()
+    expect(stkedTokens.length).to.be.equal(2)
+    
+    await this.feeCollectorInstance.removeStakedToken(stakeTranchesManager.address, 1)
+    stkedTokens = await stakeTranchesManager.stakedTokens.call()
+    expect(stkedTokens.length).to.be.equal(1)
   })
 
   it("Should add a new Stake Manager", async function() {
@@ -752,11 +787,11 @@ contract("FeeCollector", async accounts => {
 
     expect(daiBalance).to.be.bignumber.equal(depositAmount)
   })
-  it.only("Should withdraw tokens from AAVE Stake Manager", async function() {
+  it("Should withdraw tokens from AAVE Stake Manager", async function() {
     await swapUniswapV2(1, addresses.aave, addresses.weth, this.provider, this.feeCollectorOwner)
     const balance = await this.aaveInstance.methods.balanceOf(this.feeCollectorOwner).call()
     await this.aaveInstance.methods.transfer(this.stakeManager.address, balance).send({from: this.feeCollectorOwner, gasLimit: 400000})
-    await this.feeCollectorInstance.withdrawFromStakeManager(this.stakeManager.address, this.feeCollectorOwner, [balance,0])
+    await this.feeCollectorInstance.withdrawFromStakeManager(this.stakeManager.address, addresses.stakeAave ,this.feeCollectorOwner, [balance,0])
     const balanceAfter = await this.aaveInstance.methods.balanceOf(this.feeCollectorOwner).call()
     expect(balanceAfter).to.be.bignumber.equal(balance)
   })
@@ -766,14 +801,14 @@ contract("FeeCollector", async accounts => {
     const steth = new web3.eth.Contract(ERC20abi, addresses.steth)
     const balance = await steth.methods.balanceOf(this.feeCollectorOwner).call()
 
-    const underlyingTokens = [addresses.steth]
-    const stakeTranchesManager = await StakeStEthTranchesManager.new(addresses.stethGauge, underlyingTokens, addresses.STETHTranche)
+    const underlyingTokens = [[addresses.steth]]
+    const stakeTranchesManager = await StakeStEthTranchesManager.new([addresses.stethGauge], underlyingTokens, [addresses.STETHTranche])
     await stakeTranchesManager.transferOwnership(this.feeCollectorInstance.address, {from: this.feeCollectorOwner})
-    const stakeManager = {_stakeManager: stakeTranchesManager.address, _isTrunchesToken: true}
+    const stakeManager = {_stakeManager: stakeTranchesManager.address, _isTrancheToken: true}
     await this.feeCollectorInstance.addStakeManager(stakeManager)
 
     await steth.methods.transfer(stakeTranchesManager.address, balance).send({from: this.feeCollectorOwner, gasLimit: 400000})
-    await this.feeCollectorInstance.withdrawFromStakeManager(stakeTranchesManager.address, this.feeCollectorOwner, [balance])
+    await this.feeCollectorInstance.withdrawFromStakeManager(stakeTranchesManager.address, addresses.stethGauge, this.feeCollectorOwner, [balance])
     const balanceAfter = await steth.methods.balanceOf(this.feeCollectorOwner).call()
     expect(balanceAfter).to.be.bignumber.equal(balance)
   })

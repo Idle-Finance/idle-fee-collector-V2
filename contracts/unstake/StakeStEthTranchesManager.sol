@@ -11,35 +11,44 @@ contract StakeStEthTranchesManager is IStakeManager, Ownable, StakeManagerTranch
   using SafeERC20 for IERC20;
 
   
-  constructor (address _gauge, address[] memory _underlyingToken, address _tranches) StakeManagerTranches(_gauge, _underlyingToken, _tranches) {}
+  constructor (address[] memory _gauges, address[][] memory _underlyingToken, address[] memory _tranches) StakeManagerTranches(_gauges, _underlyingToken, _tranches) {}
 
-  function claimStaked(bytes calldata _extraDatas) external onlyOwner {
-    _claimStaked();
+  function claimStaked(StakeToken[] calldata _stakeTokens) external onlyOwner {
+    _claimStaked(_stakeTokens);
   }
 
-  function withdrawAdmin(address _toAddress, uint256[] calldata _amounts) external override onlyOwner {
-    _withdrawAdmin(_toAddress, _amounts);
+  function withdrawAdmin(address _stakeToken, address _toAddress, uint256[] calldata _amounts) external override onlyOwner {
+    _withdrawAdmin(_stakeToken, _toAddress, _amounts);
+  }
+
+  function addStakedToken(address _gauge, address _tranche, address[] calldata _underlyingTokens) external override onlyOwner {
+    _addStakedToken(_gauge, _tranche, _underlyingTokens);
+  }
+
+  function removeStakedToken(uint256 _index) external override onlyOwner {
+    _removeStakedToken(_index);
   }
   
-  function _claimStaked() internal {
+  function _claimStaked(StakeToken[] calldata _stakeTokens) internal {
     address sender = msg.sender;
-    uint256 balance = _gaugeBalance(sender);
-    if (balance == 0) {
-      return;
+    
+    address _stakedToken ;
+    for (uint256 index = 0; index < _stakeTokens.length; index++) {
+      _stakedToken =_stakeTokens[index]._address;
+
+      uint256 balance = _gaugeBalance(_stakedToken, sender);
+      if (balance == 0) {continue;}
+
+      _claimRewards(_stakedToken, sender);
+      _claimIdle(_stakedToken, sender);
+      _withdrawAndClaimGauge(_stakedToken, sender);
+      _withdrawTranchee(_stakedToken);
+      _transferUnderlyingToken(_stakedToken, sender);
     }
-    _claimRewards(sender);
-    _claimIdle(sender);
-    _withdrawAndClaimGauge(sender);
-    _withdrawTranchee();
-    _transferUnderlyingToken(sender);
   }
 
-  function token() external view returns (IERC20 [] memory) {
-    return _tokens();
-  }
-  
-  function stakedToken() external view returns (address){
-    return _stakedToken();
+  function stakedTokens() view external returns(address[] memory) {
+    return _stakedTokens();
   }
 
 }

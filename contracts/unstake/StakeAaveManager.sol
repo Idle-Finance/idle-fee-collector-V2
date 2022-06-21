@@ -22,17 +22,21 @@ contract StakeAaveManager is IStakeManager , Ownable {
     return StkAave.COOLDOWN_SECONDS();
   }
 
-  function claimStaked (bytes calldata _extraDatas) external override onlyOwner {
+  function claimStaked(StakeToken[] calldata _stakeTokens) external override onlyOwner {
     _claimStkAave();
   }
 
-  function withdrawAdmin(address _toAddress, uint256[] calldata _amounts) external override onlyOwner {
+  function withdrawAdmin(address _stakeToken, address _toAddress, uint256[] calldata _amounts) external override onlyOwner {
     IERC20[2] memory _tokens = [Aave, IERC20(address(StkAave))];
     for (uint256 index = 0; index < _tokens.length; ++index) {
       if(_amounts[index] == 0) {continue;}
       _tokens[index].safeTransfer(_toAddress, _amounts[index]);
     }
   }
+
+  function addStakedToken(address _gauge, address _tranche, address[] calldata _underlyingTokens) external override onlyOwner {}
+
+  function removeStakedToken(uint256 _index) external override onlyOwner {}
 
   function _claimStkAave() internal {
     uint256 _stakersCooldown = StkAave.stakersCooldowns(address(this));
@@ -68,12 +72,9 @@ contract StakeAaveManager is IStakeManager , Ownable {
     }
   }
 
-  function token() external view returns (address) {
-    return address(Aave);
+  function stakedTokens() view external override returns(address[] memory) {
+    address[] memory _stakedTokens = new address[](1);
+    _stakedTokens[0] = address(StkAave);
+    return _stakedTokens;
   }
-
-  function stakedToken() external view override returns (address) {
-    return address(StkAave);
-  }
-
 }
