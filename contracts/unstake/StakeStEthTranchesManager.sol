@@ -21,11 +21,11 @@ contract StakeStEthTranchesManager is IStakeManager, Ownable, StakeManagerTranch
     _withdrawAdmin(_stakeToken, _toAddress, _amounts);
   }
 
-  function addStakedToken(address _gauge, address _tranche, address[] calldata _underlyingTokens) external override onlyOwner {
+  function addStakedToken(address _gauge, address _tranche, address[] calldata _underlyingTokens, address _pool, address _lpTokens) external override onlyOwner {
     _addStakedToken(_gauge, _tranche, _underlyingTokens);
   }
 
-  function removeStakedToken(uint256 _index) external override onlyOwner {
+  function removeStakedToken(uint256 _index, address _gauge) external override onlyOwner {
     _removeStakedToken(_index);
   }
   

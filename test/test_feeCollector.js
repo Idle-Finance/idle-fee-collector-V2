@@ -462,12 +462,12 @@ contract("FeeCollector", async accounts => {
     const stakeManager = {_stakeManager: stakeTranchesManager.address, _isTrancheToken: true}
     await this.feeCollectorInstance.addStakeManager(stakeManager)
 
-    await this.feeCollectorInstance.addStakedToken(stakeTranchesManager.address, addresses.mimGauge, addresses.MIM3CRVTranche, [addresses.mim, addresses.crv3])
+    await this.feeCollectorInstance.addStakedToken(stakeTranchesManager.address, addresses.mimGauge, addresses.MIM3CRVTranche, [addresses.mim, addresses.crv3], addresses.MIM3CRVpool, addresses.MIM3CRV)
     
     let stkedTokens = await stakeTranchesManager.stakedTokens.call()
     expect(stkedTokens.length).to.be.equal(2)
     
-    await this.feeCollectorInstance.removeStakedToken(stakeTranchesManager.address, 1)
+    await this.feeCollectorInstance.removeStakedToken(stakeTranchesManager.address, 1, addresses.mimGauge)
     stkedTokens = await stakeTranchesManager.stakedTokens.call()
     expect(stkedTokens.length).to.be.equal(1)
   })

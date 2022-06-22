@@ -19,7 +19,7 @@ contract StakeCrvTranchesManager is IStakeManager, Ownable, StakeManagerTranches
 
   constructor (address[] memory _gauges, address[][] memory _underlyingToken, address[] memory _tranches, address[] memory _crvPools, address[] memory _crvLPTokens) StakeManagerTranches(_gauges, _underlyingToken, _tranches) {
     for (uint256 index = 0; index < _gauges.length; index++) {
-      tokenInterfaces[_gauges[index]] = TokenInterfaces(IERC20(_crvPools[index]), ICrvPool(_crvLPTokens[index]));
+      tokenInterfaces[_gauges[index]] = TokenInterfaces(IERC20(_crvLPTokens[index]), ICrvPool(_crvPools[index]));
     }
   }
 
@@ -31,11 +31,13 @@ contract StakeCrvTranchesManager is IStakeManager, Ownable, StakeManagerTranches
     _withdrawAdmin(_stakeToken, _toAddress, _amounts);
   }
 
-  function addStakedToken(address _gauge, address _tranche, address[] calldata _underlyingTokens) external override onlyOwner {
+  function addStakedToken(address _gauge, address _tranche, address[] calldata _underlyingTokens, address _pool, address _lpTokens) external override onlyOwner {
+    tokenInterfaces[_gauge] = TokenInterfaces(IERC20(_lpTokens), ICrvPool(_pool));
     _addStakedToken(_gauge, _tranche, _underlyingTokens);
   }
 
-  function removeStakedToken(uint256 _index) external override onlyOwner {
+  function removeStakedToken(uint256 _index, address _gauge) external override onlyOwner {
+    delete tokenInterfaces[_gauge];
     _removeStakedToken(_index);
   }
   

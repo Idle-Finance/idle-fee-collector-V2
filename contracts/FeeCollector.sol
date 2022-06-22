@@ -212,12 +212,12 @@ contract FeeCollector is Initializable, AccessControlUpgradeable {
     _setSplitAllocation(_newAllocation);
   }
 
-  function addStakedToken(address _stakeManager, address _gauge, address _tranche, address[] calldata _underlyingTokens) external onlyAdmin{
-    IStakeManager(_stakeManager).addStakedToken(_gauge, _tranche, _underlyingTokens);
+  function addStakedToken(address _stakeManager, address _gauge, address _tranche, address[] calldata _underlyingTokens, address _pool, address _lpToken) external onlyAdmin{
+    IStakeManager(_stakeManager).addStakedToken(_gauge, _tranche, _underlyingTokens, _pool, _lpToken);
   }
 
-  function removeStakedToken(address _stakeManager, uint256 _index) external onlyAdmin {
-    IStakeManager(_stakeManager).removeStakedToken(_index);
+  function removeStakedToken(address _stakeManager, uint256 _index, address _gauge) external onlyAdmin {
+    IStakeManager(_stakeManager).removeStakedToken(_index, _gauge);
   }
 
 	// this is used for calling deposit at the momemnt

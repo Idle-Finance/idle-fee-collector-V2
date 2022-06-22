@@ -34,9 +34,9 @@ contract StakeAaveManager is IStakeManager , Ownable {
     }
   }
 
-  function addStakedToken(address _gauge, address _tranche, address[] calldata _underlyingTokens) external override onlyOwner {}
+  function addStakedToken(address _gauge, address _tranche, address[] calldata _underlyingTokens, address _pool, address _lpTokens) external override onlyOwner {}
 
-  function removeStakedToken(uint256 _index) external override onlyOwner {}
+  function removeStakedToken(uint256 _index, address _gauge) external override onlyOwner {}
 
   function _claimStkAave() internal {
     uint256 _stakersCooldown = StkAave.stakersCooldowns(address(this));
